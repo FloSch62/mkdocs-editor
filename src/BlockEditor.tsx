@@ -57,6 +57,7 @@ import {
   serializeDocument,
 } from './blocks.ts'
 import RichMarkdown from './RichMarkdown.tsx'
+import { ADMONITION } from './admonitions.ts'
 import TableEditor from './TableEditor.tsx'
 
 const clone = <T,>(v: T): T => structuredClone(v)
@@ -280,6 +281,18 @@ function MarkdownMiniEditor({
 
 function FieldGrid({ children }: { children: ReactNode }) {
   return <Box className="field-grid">{children}</Box>
+}
+
+// Icon + label for the admonition kind dropdown — same icon/colour the rendered callout uses.
+function AdmonitionOption({ kind }: { kind: string }) {
+  const meta = ADMONITION[kind] ?? ADMONITION.note
+  const Ico = meta.Icon
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+      <Ico sx={{ fontSize: 18, color: meta.color, flexShrink: 0 }} />
+      <span style={{ textTransform: 'capitalize', overflow: 'hidden', textOverflow: 'ellipsis' }}>{kind}</span>
+    </Box>
+  )
 }
 
 // Serialize a block for preview, coercing slash-block syntax so RichMarkdown can render it
@@ -543,8 +556,15 @@ function blockEditorBody(block: DocBlock, onChange: (b: DocBlock) => void): Reac
       return (
         <>
           <FieldGrid>
-            <Select size="small" value={block.kind} onChange={(e) => onChange({ ...block, kind: e.target.value })}>
-              {ADMONITION_KINDS.map((k) => <MenuItem key={k} value={k}>{k}</MenuItem>)}
+            <Select
+              size="small"
+              value={block.kind}
+              onChange={(e) => onChange({ ...block, kind: e.target.value })}
+              renderValue={(k) => <AdmonitionOption kind={k} />}
+            >
+              {ADMONITION_KINDS.map((k) => (
+                <MenuItem key={k} value={k}><AdmonitionOption kind={k} /></MenuItem>
+              ))}
             </Select>
             <TextField size="small" label="Title" value={block.title} onChange={(e) => onChange({ ...block, title: e.target.value })} />
             <Select size="small" value={block.syntax} onChange={(e) => onChange({ ...block, syntax: e.target.value as 'zensical' | 'classic' })}>

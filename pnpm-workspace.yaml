@@ -1,0 +1,5 @@
+# pnpm v10+ reads project settings from here (no longer from the package.json "pnpm" field).
+# Approve the build scripts Vite's toolchain needs so `pnpm dev` doesn't abort on ignored builds.
+onlyBuiltDependencies:
+  - esbuild
+  - "@parcel/watcher"
