@@ -116,32 +116,35 @@ function documentHistoryReducer(state: DocumentHistory, action: HistoryAction): 
   }
 }
 
-const INSERT_GROUPS: Array<{ label: string; items: Array<{ kind: InsertKind; label: string }> }> = [
+// Each insert option carries a one-line description so the menu explains what the block
+// is — not just its name. The icon is the same one the outline / block bar uses, so a
+// block is recognisable in the menu before it exists on the page.
+const INSERT_GROUPS: Array<{ label: string; items: Array<{ kind: InsertKind; label: string; desc: string }> }> = [
   {
     label: 'Structure',
     items: [
-      { kind: 'frontmatter', label: 'Front matter' },
-      { kind: 'markdown', label: 'Markdown prose' },
-      { kind: 'admonition', label: 'Admonition' },
-      { kind: 'details', label: 'Details' },
-      { kind: 'tabset', label: 'Content tabs' },
-      { kind: 'grid', label: 'Grid cards' },
+      { kind: 'frontmatter', label: 'Front matter', desc: 'Page metadata: title, description, status' },
+      { kind: 'markdown', label: 'Markdown prose', desc: 'Formatted text paragraph' },
+      { kind: 'admonition', label: 'Admonition', desc: 'Coloured callout — note, tip, warning…' },
+      { kind: 'details', label: 'Details', desc: 'Collapsible disclosure section' },
+      { kind: 'tabset', label: 'Content tabs', desc: 'Tabbed panes for alternatives' },
+      { kind: 'grid', label: 'Grid cards', desc: 'Card grid for landing pages' },
     ],
   },
   {
     label: 'Technical content',
     items: [
-      { kind: 'htmlTable', label: 'Nested HTML table' },
-      { kind: 'markdownTable', label: 'Markdown data table' },
-      { kind: 'code', label: 'Code block' },
-      { kind: 'snippet', label: 'Snippet include' },
+      { kind: 'htmlTable', label: 'Nested HTML table', desc: 'Rich table with blocks in cells (pymdownx)' },
+      { kind: 'markdownTable', label: 'Markdown data table', desc: 'Simple pipe table with column alignment' },
+      { kind: 'code', label: 'Code block', desc: 'Syntax-highlighted code with title & line numbers' },
+      { kind: 'snippet', label: 'Snippet include', desc: 'Embed another file inline (--8<--)' },
     ],
   },
   {
     label: 'Media and actions',
     items: [
-      { kind: 'image', label: 'Image' },
-      { kind: 'button', label: 'Button link' },
+      { kind: 'image', label: 'Image', desc: 'Figure with alt text and caption' },
+      { kind: 'button', label: 'Button link', desc: 'Link styled as a call-to-action button' },
     ],
   },
 ]
@@ -394,11 +397,18 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
                       <Box key={group.label}>
                         {groupIdx > 0 && <Divider />}
                         <ListSubheader>{group.label}</ListSubheader>
-                        {group.items.map((item) => (
-                          <MenuItem key={item.kind} onClick={() => appendBlock(item.kind)}>
-                            {item.label}
-                          </MenuItem>
-                        ))}
+                        {group.items.map((item) => {
+                          const Icon = OUTLINE_ICON[item.kind]
+                          return (
+                            <MenuItem key={item.kind} className="zx-insert-item" onClick={() => appendBlock(item.kind)}>
+                              <Icon className="zx-insert-ico" />
+                              <Box className="zx-insert-text">
+                                <span className="zx-insert-label">{item.label}</span>
+                                <span className="zx-insert-desc">{item.desc}</span>
+                              </Box>
+                            </MenuItem>
+                          )
+                        })}
                       </Box>
                     ))}
                   </Menu>

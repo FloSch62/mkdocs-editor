@@ -146,9 +146,9 @@ function CellView({ cell, onChange }: { cell: Cell; onChange: (c: Cell) => void 
             onChange={(_, v) => v && onChange({ ...cell, attrs: withAlign(v) })}
             sx={{ ml: 0.5, '& .MuiToggleButton-root': { p: 0.25, border: 'none' } }}
           >
-            <ToggleButton value="left"><FormatAlignLeftIcon sx={{ fontSize: 15 }} /></ToggleButton>
-            <ToggleButton value="center"><FormatAlignCenterIcon sx={{ fontSize: 15 }} /></ToggleButton>
-            <ToggleButton value="right"><FormatAlignRightIcon sx={{ fontSize: 15 }} /></ToggleButton>
+            <Tooltip title="Align left"><ToggleButton value="left"><FormatAlignLeftIcon sx={{ fontSize: 15 }} /></ToggleButton></Tooltip>
+            <Tooltip title="Align center"><ToggleButton value="center"><FormatAlignCenterIcon sx={{ fontSize: 15 }} /></ToggleButton></Tooltip>
+            <Tooltip title="Align right"><ToggleButton value="right"><FormatAlignRightIcon sx={{ fontSize: 15 }} /></ToggleButton></Tooltip>
           </ToggleButtonGroup>
         )}
       </Box>

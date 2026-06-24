@@ -21,11 +21,13 @@ import AddIcon from '@mui/icons-material/Add'
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward'
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward'
 import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined'
+import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import CodeIcon from '@mui/icons-material/Code'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlineOutlined'
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
 import FormatAlignCenterIcon from '@mui/icons-material/FormatAlignCenter'
 import FormatAlignLeftIcon from '@mui/icons-material/FormatAlignLeft'
@@ -41,17 +43,20 @@ import LinkIcon from '@mui/icons-material/Link'
 import NotesOutlinedIcon from '@mui/icons-material/NotesOutlined'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import RawOnIcon from '@mui/icons-material/RawOn'
+import RemoveIcon from '@mui/icons-material/Remove'
 import SplitscreenOutlinedIcon from '@mui/icons-material/SplitscreenOutlined'
 import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined'
 import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined'
 import type { SvgIconComponent } from '@mui/icons-material'
 import {
   ADMONITION_KINDS,
+  type AdmonitionCollapse,
   type Align,
   type DocBlock,
   type FrontMatterData,
   type GridCard,
   type MarkdownTable,
+  type SyntaxStyle,
   type TabItem,
   newMarkdownTable,
   serializeDocument,
@@ -295,6 +300,57 @@ function AdmonitionOption({ kind }: { kind: string }) {
   )
 }
 
+// A self-explaining dropdown row: an icon or a literal-syntax chip, the option name, and
+// (in the open menu) a one-line description of what it does. The closed Select passes no
+// `desc`, so the current choice still reads as a compact icon/chip + name.
+function ChoiceRow({ Icon, chip, label, desc }: { Icon?: SvgIconComponent; chip?: string; label: string; desc?: string }) {
+  return (
+    <Box className="choice-row">
+      {Icon && <Icon className="choice-ico" sx={{ fontSize: 18 }} />}
+      {chip && <code className="choice-chip">{chip}</code>}
+      <Box className="choice-text">
+        <span className="choice-label">{label}</span>
+        {desc && <span className="choice-desc">{desc}</span>}
+      </Box>
+    </Box>
+  )
+}
+
+// Syntax picker shared by admonitions and tab sets. Each option previews the literal opener
+// it emits (/// vs !!! / ===) so the choice is concrete rather than jargon.
+function SyntaxSelect({
+  value,
+  zensicalChip,
+  classicChip,
+  classicDesc,
+  onChange,
+}: {
+  value: SyntaxStyle
+  zensicalChip: string
+  classicChip: string
+  classicDesc: string
+  onChange: (v: SyntaxStyle) => void
+}) {
+  const row = (v: SyntaxStyle, withDesc: boolean) =>
+    v === 'zensical'
+      ? <ChoiceRow chip={zensicalChip} label="Zensical" desc={withDesc ? 'PyMdown slash block' : undefined} />
+      : <ChoiceRow chip={classicChip} label="Classic" desc={withDesc ? classicDesc : undefined} />
+  return (
+    <Select size="small" value={value} onChange={(e) => onChange(e.target.value as SyntaxStyle)} renderValue={(v) => row(v, false)}>
+      <MenuItem value="zensical">{row('zensical', true)}</MenuItem>
+      <MenuItem value="classic">{row('classic', true)}</MenuItem>
+    </Select>
+  )
+}
+
+// Collapse picker — each option shows the fold control the reader gets: no toggle when
+// static, a chevron that points sideways when it starts closed and down when it starts open.
+const COLLAPSE_OPTIONS: Array<{ value: AdmonitionCollapse; Icon: SvgIconComponent; label: string; desc: string }> = [
+  { value: 'none', Icon: RemoveIcon, label: 'Static', desc: 'Always expanded — no toggle' },
+  { value: 'closed', Icon: ChevronRightIcon, label: 'Fold closed', desc: 'Collapsible, starts closed' },
+  { value: 'open', Icon: ExpandMoreIcon, label: 'Fold open', desc: 'Collapsible, starts open' },
+]
+
 // Serialize a block for preview, coercing slash-block syntax so RichMarkdown can render it
 // (it understands `///` blocks, not the classic `!!!` / `===` forms).
 function previewMarkdown(block: DocBlock): string {
@@ -418,9 +474,9 @@ function MarkdownTableEditor({ table, onChange }: { table: MarkdownTable; onChan
                         value={table.aligns[c] ?? 'left'}
                         onChange={(_alignEvent, v: Align | null) => v && mutate((t) => { t.aligns[c] = v })}
                       >
-                        <ToggleButton value="left"><FormatAlignLeftIcon sx={{ fontSize: 15 }} /></ToggleButton>
-                        <ToggleButton value="center"><FormatAlignCenterIcon sx={{ fontSize: 15 }} /></ToggleButton>
-                        <ToggleButton value="right"><FormatAlignRightIcon sx={{ fontSize: 15 }} /></ToggleButton>
+                        <Tooltip title="Align left"><ToggleButton value="left"><FormatAlignLeftIcon sx={{ fontSize: 15 }} /></ToggleButton></Tooltip>
+                        <Tooltip title="Align center"><ToggleButton value="center"><FormatAlignCenterIcon sx={{ fontSize: 15 }} /></ToggleButton></Tooltip>
+                        <Tooltip title="Align right"><ToggleButton value="right"><FormatAlignRightIcon sx={{ fontSize: 15 }} /></ToggleButton></Tooltip>
                       </ToggleButtonGroup>
                       {cols > 1 && (
                         <Tooltip title="Delete column">
@@ -489,10 +545,13 @@ function TabsEditor({ block, onChange }: { block: Extract<DocBlock, { type: 'tab
   return (
     <>
       <Box className="inline-row">
-        <Select size="small" value={block.syntax} onChange={(e) => onChange({ ...block, syntax: e.target.value as 'zensical' | 'classic' })}>
-          <MenuItem value="zensical">Zensical slash blocks</MenuItem>
-          <MenuItem value="classic">Classic Material tabs</MenuItem>
-        </Select>
+        <SyntaxSelect
+          value={block.syntax}
+          zensicalChip="/// tab"
+          classicChip={'=== "Tab"'}
+          classicDesc="Material content tabs"
+          onChange={(syntax) => onChange({ ...block, syntax })}
+        />
         <Button size="small" startIcon={<AddIcon />} onClick={add}>Tab</Button>
         <Button size="small" startIcon={<DeleteOutlineIcon />} onClick={remove}>Delete tab</Button>
       </Box>
@@ -567,14 +626,25 @@ function blockEditorBody(block: DocBlock, onChange: (b: DocBlock) => void): Reac
               ))}
             </Select>
             <TextField size="small" label="Title" value={block.title} onChange={(e) => onChange({ ...block, title: e.target.value })} />
-            <Select size="small" value={block.syntax} onChange={(e) => onChange({ ...block, syntax: e.target.value as 'zensical' | 'classic' })}>
-              <MenuItem value="zensical">Zensical slash block</MenuItem>
-              <MenuItem value="classic">Classic Material</MenuItem>
-            </Select>
-            <Select size="small" value={block.collapse} onChange={(e) => onChange({ ...block, collapse: e.target.value as typeof block.collapse })}>
-              <MenuItem value="none">Static</MenuItem>
-              <MenuItem value="closed">Collapsible closed</MenuItem>
-              <MenuItem value="open">Collapsible open</MenuItem>
+            <SyntaxSelect
+              value={block.syntax}
+              zensicalChip={`/// ${block.kind}`}
+              classicChip={`!!! ${block.kind}`}
+              classicDesc="Material admonition"
+              onChange={(syntax) => onChange({ ...block, syntax })}
+            />
+            <Select
+              size="small"
+              value={block.collapse}
+              onChange={(e) => onChange({ ...block, collapse: e.target.value as typeof block.collapse })}
+              renderValue={(v) => {
+                const o = COLLAPSE_OPTIONS.find((c) => c.value === v) ?? COLLAPSE_OPTIONS[0]
+                return <ChoiceRow Icon={o.Icon} label={o.label} />
+              }}
+            >
+              {COLLAPSE_OPTIONS.map((o) => (
+                <MenuItem key={o.value} value={o.value}><ChoiceRow Icon={o.Icon} label={o.label} desc={o.desc} /></MenuItem>
+              ))}
             </Select>
           </FieldGrid>
           <MarkdownMiniEditor label="Admonition content" value={block.body} onChange={(body) => onChange({ ...block, body })} />
