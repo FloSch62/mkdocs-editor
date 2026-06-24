@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import {
   AppBar,
   Box,
@@ -18,6 +18,8 @@ import DarkModeIcon from '@mui/icons-material/DarkMode'
 import CodeIcon from '@mui/icons-material/Code'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import DownloadIcon from '@mui/icons-material/Download'
+import RedoIcon from '@mui/icons-material/Redo'
+import UndoIcon from '@mui/icons-material/Undo'
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined'
@@ -46,6 +48,73 @@ import ZensicalLogo from './ZensicalLogo.tsx'
 import { SAMPLE } from './sample.ts'
 
 const clone = <T,>(v: T): T => structuredClone(v)
+
+const HISTORY_LIMIT = 100
+
+type BlocksState = DocBlock[] | null
+type BlocksUpdater = BlocksState | ((prev: BlocksState) => BlocksState)
+
+interface DocumentHistory {
+  past: DocBlock[][]
+  present: BlocksState
+  future: DocBlock[][]
+}
+
+type HistoryAction =
+  | { type: 'commit'; updater: BlocksUpdater }
+  | { type: 'reset'; blocks: BlocksState }
+  | { type: 'undo' }
+  | { type: 'redo' }
+
+const snapshot = (blocks: DocBlock[]): DocBlock[] => clone(blocks)
+
+function sameBlocks(a: BlocksState, b: BlocksState): boolean {
+  if (a === b) return true
+  if (!a || !b) return a === b
+  return JSON.stringify(a) === JSON.stringify(b)
+}
+
+function documentHistoryReducer(state: DocumentHistory, action: HistoryAction): DocumentHistory {
+  switch (action.type) {
+    case 'reset':
+      return {
+        past: [],
+        present: action.blocks ? snapshot(action.blocks) : null,
+        future: [],
+      }
+    case 'commit': {
+      const nextValue = typeof action.updater === 'function'
+        ? action.updater(state.present)
+        : action.updater
+      const next = nextValue ? snapshot(nextValue) : null
+      if (sameBlocks(state.present, next)) return state
+      if (!state.present || !next) return { past: [], present: next, future: [] }
+      return {
+        past: [...state.past, snapshot(state.present)].slice(-HISTORY_LIMIT),
+        present: next,
+        future: [],
+      }
+    }
+    case 'undo': {
+      const previous = state.past.at(-1)
+      if (!previous || !state.present) return state
+      return {
+        past: state.past.slice(0, -1),
+        present: snapshot(previous),
+        future: [snapshot(state.present), ...state.future].slice(0, HISTORY_LIMIT),
+      }
+    }
+    case 'redo': {
+      const next = state.future[0]
+      if (!next || !state.present) return state
+      return {
+        past: [...state.past, snapshot(state.present)].slice(-HISTORY_LIMIT),
+        present: snapshot(next),
+        future: state.future.slice(1),
+      }
+    }
+  }
+}
 
 const INSERT_GROUPS: Array<{ label: string; items: Array<{ kind: InsertKind; label: string }> }> = [
   {
@@ -128,7 +197,11 @@ const scrollToId = (id: string) =>
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
 export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: () => void }) {
-  const [blocks, setBlocks] = useState<DocBlock[] | null>(null)
+  const [history, dispatchHistory] = useReducer(documentHistoryReducer, {
+    past: [],
+    present: null,
+    future: [],
+  })
   const [paste, setPaste] = useState('')
   const [showSource, setShowSource] = useState(false)
   const [preview, setPreview] = useState(false)
@@ -140,15 +213,45 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
   const [activeHeading, setActiveHeading] = useState<string | null>(null)
   const [activeBlock, setActiveBlock] = useState<number | null>(null)
 
+  const blocks = history.present
+  const canUndo = history.past.length > 0
+  const canRedo = history.future.length > 0
+
   const markdown = useMemo(() => (blocks ? serializeDocument(blocks) : ''), [blocks])
 
-  const load = (src: string) => setBlocks(parseDocument(src))
+  const commitBlocks = useCallback((updater: BlocksUpdater) => {
+    dispatchHistory({ type: 'commit', updater })
+  }, [])
+
+  const openDocument = (src: string) => {
+    dispatchHistory({ type: 'reset', blocks: parseDocument(src) })
+  }
+
+  const replaceFromMarkdown = (src: string) => {
+    commitBlocks(parseDocument(src))
+  }
+
+  const closeDocument = () => {
+    dispatchHistory({ type: 'reset', blocks: null })
+    setPaste('')
+    setPreview(false)
+    setShowSource(false)
+    setInsertAnchor(null)
+  }
+
+  const undo = useCallback(() => {
+    dispatchHistory({ type: 'undo' })
+  }, [])
+
+  const redo = useCallback(() => {
+    dispatchHistory({ type: 'redo' })
+  }, [])
 
   const updateBlock = (i: number, block: DocBlock) =>
-    setBlocks((prev) => prev!.map((b, idx) => (idx === i ? block : b)))
+    commitBlocks((prev) => prev!.map((b, idx) => (idx === i ? block : b)))
 
   const insertBlockAt = (idx: number, block: DocBlock) =>
-    setBlocks((prev) => {
+    commitBlocks((prev) => {
       const next = [...(prev ?? [])]
       next.splice(idx, 0, block)
       return next
@@ -159,18 +262,18 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
     setInsertAnchor(null)
   }
 
-  const duplicateBlock = (idx: number) => setBlocks((prev) => {
+  const duplicateBlock = (idx: number) => commitBlocks((prev) => {
     const next = [...prev!]
     next.splice(idx + 1, 0, clone(next[idx]))
     return next
   })
 
-  const deleteBlock = (idx: number) => setBlocks((prev) => prev!.filter((_, i) => i !== idx))
+  const deleteBlock = (idx: number) => commitBlocks((prev) => prev!.filter((_, i) => i !== idx))
 
-  const moveBlock = (idx: number, dir: -1 | 1) => setBlocks((prev) => {
+  const moveBlock = (idx: number, dir: -1 | 1) => commitBlocks((prev) => {
     const next = [...prev!]
     const target = idx + dir
-    if (target < 0 || target >= next.length) return next
+    if (target < 0 || target >= next.length) return prev
     const [item] = next.splice(idx, 1)
     next.splice(target, 0, item)
     return next
@@ -185,6 +288,28 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
     a.click()
     URL.revokeObjectURL(a.href)
   }
+
+  useEffect(() => {
+    if (!blocks) return
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return
+      const key = event.key.toLowerCase()
+      if (key === 'z' && event.shiftKey && canRedo) {
+        event.preventDefault()
+        redo()
+      } else if (key === 'z' && !event.shiftKey && canUndo) {
+        event.preventDefault()
+        undo()
+      } else if (key === 'y' && !event.shiftKey && canRedo) {
+        event.preventDefault()
+        redo()
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [blocks, canRedo, canUndo, redo, undo])
 
   // Collect the on-page headings and wire scroll-spy for both the TOC and the outline.
   // Re-runs whenever the rendered markdown changes.
@@ -245,6 +370,20 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
               >
                 {preview ? 'Edit' : 'Preview'}
               </Button>
+              <Tooltip title="Undo (Ctrl+Z)">
+                <span>
+                  <IconButton size="small" disabled={!canUndo} onClick={undo}>
+                    <UndoIcon />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip title="Redo (Ctrl+Y / Ctrl+Shift+Z)">
+                <span>
+                  <IconButton size="small" disabled={!canRedo} onClick={redo}>
+                    <RedoIcon />
+                  </IconButton>
+                </span>
+              </Tooltip>
               {!preview && (
                 <>
                   <Button size="small" startIcon={<AddIcon />} onClick={(e) => setInsertAnchor(e.currentTarget)}>
@@ -280,7 +419,7 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
                   <DownloadIcon />
                 </IconButton>
               </Tooltip>
-              <Button size="small" onClick={() => { setBlocks(null); setPaste('') }}>Close</Button>
+              <Button size="small" onClick={closeDocument}>Close</Button>
             </>
           )}
           <Tooltip title="Toggle light/dark">
@@ -309,13 +448,13 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
               onChange={(e) => setPaste(e.target.value)}
             />
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'center' }}>
-              <Button variant="contained" disabled={!paste.trim()} onClick={() => load(paste)}>
+              <Button variant="contained" disabled={!paste.trim()} onClick={() => openDocument(paste)}>
                 Open in editor
               </Button>
-              <Button variant="outlined" onClick={() => setBlocks([newBlock('frontmatter'), newBlock('markdown')])}>
+              <Button variant="outlined" onClick={() => dispatchHistory({ type: 'reset', blocks: [newBlock('frontmatter'), newBlock('markdown')] })}>
                 Start blank
               </Button>
-              <Button variant="outlined" onClick={() => { setPaste(SAMPLE); load(SAMPLE) }}>
+              <Button variant="outlined" onClick={() => { setPaste(SAMPLE); openDocument(SAMPLE) }}>
                 Load sample
               </Button>
             </Box>
@@ -376,7 +515,7 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
               <textarea
                 className="source"
                 value={markdown}
-                onChange={(e) => load(e.target.value)}
+                onChange={(e) => replaceFromMarkdown(e.target.value)}
                 spellCheck={false}
               />
             </div>
