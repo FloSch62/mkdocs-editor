@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   Box,
   Button,
@@ -33,15 +33,44 @@ const withAlign = (a: string) => (a === 'left' ? '' : `[style='text-align: ${a};
 // One cell: ordered markdown text runs and/or nested tables, each editable in place.
 function CellView({ cell, onChange }: { cell: Cell; onChange: (c: Cell) => void }) {
   const [edit, setEdit] = useState<{ idx: number; value: string } | null>(null)
+  const skipNextCommit = useRef(false)
 
   const commit = () => {
+    if (skipNextCommit.current) {
+      skipNextCommit.current = false
+      return
+    }
     if (!edit) return
     const next = clone(cell)
-    next.blocks[edit.idx] = { type: 'text', md: edit.value }
+    if (edit.value.trim()) next.blocks[edit.idx] = { type: 'text', md: edit.value }
+    else next.blocks.splice(edit.idx, 1)
     setEdit(null)
     onChange(next)
   }
   const mutate = (fn: (c: Cell) => void) => { const next = clone(cell); fn(next); onChange(next) }
+  const removeBlock = (idx: number) => {
+    setEdit((cur) => {
+      if (!cur) return null
+      if (cur.idx === idx) return null
+      return cur.idx > idx ? { ...cur, idx: cur.idx - 1 } : cur
+    })
+    mutate((c) => c.blocks.splice(idx, 1))
+  }
+  const addTextBlock = () => {
+    const idx = cell.blocks.length
+    const next = clone(cell)
+    next.blocks.push({ type: 'text', md: '' })
+    onChange(next)
+    skipNextCommit.current = false
+    setEdit({ idx, value: '' })
+  }
+  const cancelEdit = () => {
+    if (!edit) return
+    const original = cell.blocks[edit.idx]
+    skipNextCommit.current = true
+    setEdit(null)
+    if (original?.type === 'text' && original.md === '') removeBlock(edit.idx)
+  }
 
   return (
     <Box className="cell">
@@ -59,18 +88,28 @@ function CellView({ cell, onChange }: { cell: Cell; onChange: (c: Cell) => void 
               onBlur={commit}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) commit()
-                if (e.key === 'Escape') setEdit(null)
+                if (e.key === 'Escape') cancelEdit()
               }}
               sx={{ '& .MuiInputBase-input': { fontSize: 14 } }}
             />
           ) : (
-            <Box
-              key={i}
-              className={`cell-rendered${b.md.trim() ? '' : ' empty'}`}
-              title="Click to edit · ⌘/Ctrl+Enter to save · Esc to cancel"
-              onClick={() => setEdit({ idx: i, value: b.md })}
-              dangerouslySetInnerHTML={{ __html: renderMarkdown(b.md) }}
-            />
+            <Box key={i} className="cell-text-block">
+              <Box
+                className={`cell-rendered${b.md.trim() ? '' : ' empty'}`}
+                title="Click to edit · ⌘/Ctrl+Enter to save · Esc to cancel"
+                onClick={() => { skipNextCommit.current = false; setEdit({ idx: i, value: b.md }) }}
+                dangerouslySetInnerHTML={{ __html: renderMarkdown(b.md) }}
+              />
+              <Tooltip title="Remove text block">
+                <IconButton
+                  className="cell-block-action"
+                  size="small"
+                  onClick={(e) => { e.stopPropagation(); removeBlock(i) }}
+                >
+                  <DeleteOutlineIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              </Tooltip>
+            </Box>
           )
         ) : (
           <Box key={i} sx={{ mt: 0.75 }}>
@@ -78,7 +117,7 @@ function CellView({ cell, onChange }: { cell: Cell; onChange: (c: Cell) => void 
               <TableChartOutlinedIcon sx={{ fontSize: 15, color: 'var(--muted)' }} />
               <Box sx={{ fontSize: 11, color: 'var(--muted)', flexGrow: 1 }}>nested table</Box>
               <Tooltip title="Remove nested table">
-                <IconButton size="small" onClick={() => mutate((c) => c.blocks.splice(i, 1))}>
+                <IconButton size="small" onClick={() => removeBlock(i)}>
                   <DeleteOutlineIcon sx={{ fontSize: 16 }} />
                 </IconButton>
               </Tooltip>
@@ -90,7 +129,7 @@ function CellView({ cell, onChange }: { cell: Cell; onChange: (c: Cell) => void 
 
       <Box className="cell-foot">
         <Tooltip title="Add text block">
-          <IconButton size="small" onClick={() => mutate((c) => c.blocks.push({ type: 'text', md: '' }))}>
+          <IconButton size="small" onClick={addTextBlock}>
             <NotesIcon sx={{ fontSize: 16 }} />
           </IconButton>
         </Tooltip>

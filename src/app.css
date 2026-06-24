@@ -21,7 +21,74 @@
 .prose { line-height: 1.55; }
 .prose :first-child { margin-top: 0; }
 .prose pre, .prose code { font-family: "Roboto Mono", ui-monospace, monospace; }
+.prose pre {
+  margin: 1em 0;
+  padding: 10px 12px;
+  overflow: auto;
+  background: color-mix(in srgb, var(--muted) 12%, var(--panel));
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
 .prose code { background: color-mix(in srgb, var(--muted) 18%, transparent); padding: 1px 5px; border-radius: 4px; }
+.prose pre code {
+  display: block;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  white-space: pre;
+}
+.prose .embed-result { margin-top: -0.75em; }
+.prose .admonition {
+  margin: 1.5em 0;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--accent) 9%, var(--panel));
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: 6px;
+}
+.prose .admonition-title {
+  margin: 0;
+  padding: 10px 12px;
+  font-weight: 600;
+}
+.prose .admonition-title + * { margin-top: 0; }
+.prose .admonition > :not(.admonition-title) { margin-left: 12px; margin-right: 12px; }
+.prose .admonition > :last-child { margin-bottom: 12px; }
+.steps > .prose > ol { counter-reset: item; }
+.steps > .prose > ol > li {
+  position: relative;
+  padding-left: 1em;
+  list-style: none;
+}
+.steps > .prose > ol > li::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  width: 1.2rem;
+  height: 1.2rem;
+  margin-left: -1.25em;
+  color: var(--fg);
+  font-weight: 600;
+  font-size: 0.9em;
+  line-height: 1.2rem;
+  text-align: center;
+  border: 1px solid var(--line);
+  border-radius: 100px;
+  content: counter(item);
+  counter-increment: item;
+}
+.steps > .prose > ol > li::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -0.36em;
+  display: block;
+  width: 1px;
+  margin-top: 2em;
+  border-left: 1px solid var(--line);
+  content: '';
+}
 .prose-edit {
   width: 100%; min-height: 90px; resize: vertical; font: inherit;
   background: var(--panel); color: var(--fg); border: 1px solid var(--accent);
@@ -60,6 +127,15 @@
 .tbl tr:hover .row-actions { opacity: 1; }
 
 .cell { padding: 7px 9px; min-width: 110px; }
+.cell-text-block { position: relative; padding-right: 24px; }
+.cell-block-action {
+  position: absolute !important;
+  top: 0;
+  right: 0;
+  opacity: 0;
+  transition: opacity .12s;
+}
+.cell-text-block:hover .cell-block-action { opacity: 1; }
 .cell-rendered { line-height: 1.5; cursor: text; border-radius: 4px; }
 .cell-rendered:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
 .cell-rendered :first-child { margin-top: 0; }

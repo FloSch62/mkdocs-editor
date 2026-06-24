@@ -38,15 +38,15 @@ type RichNode =
   | { type: 'block'; kind: string; title: string | null; children: RichNode[] }
   | { type: 'snippet'; path: string }
 
-const OPEN = /^(\/{3,})\s+([A-Za-z][\w-]*)\s*(?:\|\s*(.*?))?\s*$/
-const CLOSE = /^(\/{3,})\s*$/
+const OPEN = /^(\s*)(\/{3,})\s+([A-Za-z][\w-]*)\s*(?:\|\s*(.*?))?\s*$/
+const CLOSE = /^(\s*)(\/{3,})\s*$/
 const SNIPPET = /^\s*--8<--\s+"(.+?)"\s*$/
 // A fenced code block delimiter: ``` or ~~~ (optionally indented, optional info string).
 const FENCE = /^(\s*)(`{3,}|~{3,})\s*(.*)$/
 
 function parseRich(text: string): RichNode[] {
   const lines = text.replace(/\r\n?/g, '\n').split('\n')
-  const [nodes] = parseUntil(lines, 0, 0)
+  const [nodes] = parseUntil(lines, 0, 0, '')
   return nodes
 }
 
@@ -74,7 +74,15 @@ function normalizeAdmonition(title: string | null, children: RichNode[]): { kind
 // Parse nodes until a closing fence of `marker` length (0 = top level / EOF). Fenced code
 // blocks are passed through verbatim so `///` / `--8<--` *inside* a code sample are never
 // mistaken for block syntax.
-function parseUntil(lines: string[], start: number, marker: number): [RichNode[], number] {
+function stripIndent(line: string, indent: string): string {
+  return indent && line.startsWith(indent) ? line.slice(indent.length) : line
+}
+
+function isChildBlock(openIndent: string, openMarker: number, parentIndent: string, parentMarker: number): boolean {
+  return openIndent === parentIndent && openMarker > parentMarker
+}
+
+function parseUntil(lines: string[], start: number, marker: number, indent: string): [RichNode[], number] {
   const nodes: RichNode[] = []
   let buf: string[] = []
   let fence: { char: string; len: number } | null = null
@@ -89,24 +97,24 @@ function parseUntil(lines: string[], start: number, marker: number): [RichNode[]
     if (fence) {
       // inside a code block: only its matching closing delimiter ends it
       if (fm && fm[2][0] === fence.char && fm[2].length >= fence.len && fm[3].trim() === '') fence = null
-      buf.push(line); i++; continue
+      buf.push(stripIndent(line, indent)); i++; continue
     }
-    if (fm) { fence = { char: fm[2][0], len: fm[2].length }; buf.push(line); i++; continue }
+    if (fm) { fence = { char: fm[2][0], len: fm[2].length }; buf.push(stripIndent(line, indent)); i++; continue }
     const close = CLOSE.exec(line)
-    if (marker > 0 && close && close[1].length === marker) { flush(); return [nodes, i + 1] }
+    if (marker > 0 && close && close[1] === indent && close[2].length === marker) { flush(); return [nodes, i + 1] }
     const open = OPEN.exec(line)
-    if (open && open[1].length > marker) {
+    if (open && isChildBlock(open[1], open[2].length, indent, marker)) {
       flush()
-      const [children, next] = parseUntil(lines, i + 1, open[1].length)
-      const kind = open[2].toLowerCase()
-      const title = open[3]?.trim() || null
+      const [children, next] = parseUntil(lines, i + 1, open[2].length, open[1])
+      const kind = open[3].toLowerCase()
+      const title = open[4]?.trim() || null
       nodes.push({ type: 'block', ...(kind === 'admonition' ? normalizeAdmonition(title, children) : { kind, title, children }) })
       i = next
       continue
     }
     const snip = SNIPPET.exec(line)
     if (snip) { flush(); nodes.push({ type: 'snippet', path: snip[1] }); i++; continue }
-    buf.push(line)
+    buf.push(stripIndent(line, indent))
     i++
   }
   flush()
@@ -161,6 +169,14 @@ function Snippet({ path }: { path: string }) {
 }
 
 const isBlank = (n: RichNode) => n.type === 'md' && n.text.trim() === ''
+
+function htmlDivClassName(title: string | null): string | null {
+  const target = title?.trim()
+  if (!target) return null
+  const m = /^div((?:\.[A-Za-z0-9_-]+)+)$/.exec(target)
+  if (!m) return null
+  return m[1].slice(1).replace(/\./g, ' ')
+}
 
 function Admonition({ kind, title, nodes }: { kind: string; title: string | null; nodes: RichNode[] }) {
   const meta = ADMONITION[kind] ?? ADMONITION.note
@@ -225,6 +241,12 @@ function TabGroup({ tabs }: { tabs: Array<{ title: string; children: RichNode[] 
   )
 }
 
+function HtmlBlock({ title, nodes }: { title: string | null; nodes: RichNode[] }) {
+  const className = htmlDivClassName(title)
+  if (!className) return <RichNodes nodes={nodes} />
+  return <div className={className}><RichNodes nodes={nodes} /></div>
+}
+
 // Render a node list, grouping consecutive `tab` blocks (ignoring blank md between them)
 // into a single tab switcher — exactly how MkDocs collapses sibling tabs.
 function RichNodes({ nodes }: { nodes: RichNode[] }) {
@@ -247,7 +269,7 @@ function RichNodes({ nodes }: { nodes: RichNode[] }) {
     else if (n.type === 'md') { if (!isBlank(n)) out.push(<Md key={i} text={n.text} />) }
     else if (n.kind === 'details') out.push(<Details key={i} title={n.title} nodes={n.children} />)
     else if (ADMONITION[n.kind]) out.push(<Admonition key={i} kind={n.kind} title={n.title} nodes={n.children} />)
-    else if (n.kind === 'html') out.push(<RichNodes key={i} nodes={n.children} />)
+    else if (n.kind === 'html') out.push(<HtmlBlock key={i} title={n.title} nodes={n.children} />)
     else {
       // unknown block: show its body with a small type label so nothing is silently lost
       out.push(
