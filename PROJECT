@@ -1,0 +1,6 @@
+builderVersion: v26.4.2
+catalog: https://github.com/eda-labs/catalog
+domain: eda.labs
+name: mkdocs-editor
+registry: ghcr.io/eda-labs
+vendor: eda-labs

@@ -1,0 +1,85 @@
+/* mkdocs-editor layout + the editable-table chrome. Colours read from the theme vars in
+   index.css (--bg/--panel/--line/--fg/--muted/--accent) so light/dark flip in lockstep. */
+
+.app-shell { display: flex; flex-direction: column; height: 100%; background: var(--bg); color: var(--fg); }
+
+.app-body { flex: 1; display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
+.app-body.single { grid-template-columns: 1fr; }
+
+.pane { min-width: 0; min-height: 0; overflow: auto; padding: 20px 24px; }
+.pane + .pane { border-left: 1px solid var(--line); }
+.pane-title {
+  font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--muted); margin: 0 0 12px;
+}
+
+/* --- preview / editable document --- */
+/* Reading width when the source pane is open; full bleed when it's hidden so wide tables
+   (and deeply nested ones) get all the room. */
+.doc { max-width: 880px; margin: 0 auto; }
+.app-body.single .doc { max-width: 1280px; }
+.prose { line-height: 1.55; }
+.prose :first-child { margin-top: 0; }
+.prose pre, .prose code { font-family: "Roboto Mono", ui-monospace, monospace; }
+.prose code { background: color-mix(in srgb, var(--muted) 18%, transparent); padding: 1px 5px; border-radius: 4px; }
+.prose-edit {
+  width: 100%; min-height: 90px; resize: vertical; font: inherit;
+  background: var(--panel); color: var(--fg); border: 1px solid var(--accent);
+  border-radius: 6px; padding: 10px 12px;
+}
+.seg { position: relative; border-radius: 8px; padding: 2px; transition: background .12s; }
+.seg:hover { background: color-mix(in srgb, var(--muted) 7%, transparent); }
+.seg-edit-btn {
+  position: absolute !important; top: 4px; right: 4px; z-index: 2;
+  opacity: 0; transition: opacity .12s; background: var(--panel) !important;
+  border: 1px solid var(--line) !important;
+}
+.seg:hover .seg-edit-btn { opacity: 1; }
+
+/* --- the table editor (MUI Paper card) --- */
+.tbl-card { margin: 14px 0; border-radius: 10px !important; overflow: hidden; background: var(--panel) !important; }
+.tbl-bar {
+  display: flex; align-items: center; gap: 6px; padding: 6px 8px 6px 12px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--accent) 6%, var(--panel));
+}
+/* nested cards read one step lighter + an accent rail so depth is legible */
+.tbl-card .tbl-card { margin: 8px 0; box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 55%, transparent); }
+
+.tbl { border-collapse: collapse; width: 100%; }
+.tbl th, .tbl td { border: 1px solid var(--line); vertical-align: top; padding: 0; }
+.tbl th { background: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
+.tbl td { background: var(--panel); }
+.tbl .gutter { width: 30px; border: none; background: transparent; text-align: center; }
+
+.th-inner { position: relative; }
+.hover-action { position: absolute !important; top: 2px; right: 2px; opacity: 0; transition: opacity .12s; }
+.tbl th:hover .hover-action { opacity: 1; }
+
+.row-actions { display: inline-flex; flex-direction: column; opacity: 0; transition: opacity .12s; }
+.tbl tr:hover .row-actions { opacity: 1; }
+
+.cell { padding: 7px 9px; min-width: 110px; }
+.cell-rendered { line-height: 1.5; cursor: text; border-radius: 4px; }
+.cell-rendered:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.cell-rendered :first-child { margin-top: 0; }
+.cell-rendered :last-child { margin-bottom: 0; }
+.cell-rendered code { font-family: "Roboto Mono", ui-monospace, monospace; }
+.cell-rendered.empty { cursor: text; }
+.cell-rendered.empty::before { content: 'empty'; color: var(--muted); font-style: italic; opacity: .7; }
+.cell-foot { display: flex; align-items: center; gap: 2px; margin-top: 4px; flex-wrap: wrap; opacity: 0; transition: opacity .12s; }
+.cell:hover .cell-foot { opacity: 1; }
+
+/* --- source pane --- */
+.source {
+  width: 100%; height: 100%; min-height: 320px; resize: none; font-family: "Roboto Mono", ui-monospace, monospace;
+  font-size: 12.5px; line-height: 1.5; background: var(--panel); color: var(--fg);
+  border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; white-space: pre;
+}
+
+.empty-state { display: grid; place-items: center; height: 100%; text-align: center; padding: 40px; }
+.empty-state .paste {
+  width: 100%; max-width: 640px; min-height: 220px; font-family: "Roboto Mono", ui-monospace, monospace;
+  font-size: 13px; background: var(--panel); color: var(--fg); border: 1px solid var(--line);
+  border-radius: 8px; padding: 14px;
+}
