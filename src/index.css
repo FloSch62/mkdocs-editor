@@ -1,36 +1,28 @@
-/* Global styling adopted from eda-labs/topo-builder (src/styles/global.css).
-   NokiaPureText is imported in nokia-fonts.css (CDN, like nokia-eda/docs). */
+/* Global theme tokens. Colours are exposed as CSS custom properties so the plain-CSS
+   chrome in app.css flips between light and dark in lockstep with the MUI theme.
+   Dark mode is the default; light mode is toggled by data-theme="light" on <html>. */
 
 :root {
-  --color-link-stroke: #8994a37f;
-  --color-link-stroke-selected: #6098FF;
-  --color-link-stroke-highlight: #6098FF;
-  --color-node-border: #8994a37f;
-  --color-node-border-selected: #6098FF;
-  --color-node-bg: #000000;
-  --color-node-text: #ffffff;
-  --color-handle-bg: #1e1e1e;
-  --color-icon-bg: #707070;
-  --color-icon-fg: #ffffff;
-
-  /* aliases used by app.css and the inline node / edge styling */
-  --bg: #1A222E; --panel: #101824; --line: #4A5361B2; --fg: #ffffff; --muted: #C9CED6;
-  --accent: #6098FF;
-  --cell-free-bg: #222c39; --cell-free-fg: #3d4756; --cell-free-line: #2c3645;
-  --port-hot-ring: #ffffff; --label-bg: #0B1119;
-  --node-ring: rgba(255, 255, 255, 0.55); --node-ring-soft: rgba(255, 255, 255, 0.18);
-  --edge-idle: 0.62;   /* idle cable opacity — bright colours read on dark at 0.62 */
+  --bg: #1b1b1f;
+  --sidebar: #151518;
+  --panel: #232328;
+  --line: rgba(255, 255, 255, 0.08);
+  --fg: #e6e6ea;
+  --muted: #9d9da7;
+  --accent: #6e8bfb;
+  --accent-2: #2dd4bf;
   color-scheme: dark;
 }
 
-/* light mode — toggled by setting data-theme="light" on <html> (see main.tsx Root) */
 :root[data-theme='light'] {
-  --bg: #E7ECF2; --panel: #FFFFFF; --line: #BCC5D2; --fg: #0B1119; --muted: #4A5563;
-  --accent: #2F6BE0;
-  --cell-free-bg: #DBE1E9; --cell-free-fg: #9AA4B2; --cell-free-line: #C0C8D4;
-  --port-hot-ring: #0B1119; --label-bg: #FFFFFF;
-  --node-ring: rgba(11, 17, 25, 0.5); --node-ring-soft: rgba(11, 17, 25, 0.14);
-  --edge-idle: 0.95;   /* light bg needs near-opaque cables or they wash out */
+  --bg: #fafafa;
+  --sidebar: #f4f4f5;
+  --panel: #ffffff;
+  --line: rgba(0, 0, 0, 0.08);
+  --fg: #1c1c21;
+  --muted: #6e6e78;
+  --accent: #3b66f5;
+  --accent-2: #0d9488;
   color-scheme: light;
 }
 
@@ -42,6 +34,3 @@ body {
   text-rendering: optimizeLegibility;
 }
 .muted { color: var(--muted); }
-
-/* canvas colour follows the theme; React Flow's colorMode prop does the control chrome */
-.react-flow { --xy-background-color: var(--panel); -webkit-user-select: none; user-select: none; }

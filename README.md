@@ -1,12 +1,11 @@
 # MkDocs / Zensical Editor
 
-A small EDA-family web app (sibling to `cable-map` and `topo-builder`) for visually authoring
-MkDocs Material / Zensical markdown. Paste a page, edit structured blocks, and copy or download
-clean markdown back out.
+A small, fully client-side web app for visually authoring MkDocs Material / Zensical markdown.
+Paste a page, edit structured blocks, and copy or download clean markdown back out.
 
-The original nested `pymdownx.blocks.html` table editor is still the strongest path: recursive
-tables are parsed into a real grid and serialized with slash depth recomputed. The app now also
-models the common authoring blocks users reach for when creating polished docs pages.
+The nested `pymdownx.blocks.html` table editor is the strongest path: recursive tables are parsed
+into a real grid and serialized with slash depth recomputed. The app also models the common
+authoring blocks users reach for when creating polished docs pages.
 
 ## What it edits
 
@@ -55,8 +54,8 @@ pnpm lint       # oxlint
 pnpm check      # parser/serializer round-trip fixtures
 ```
 
-Click **Load EDAADM sample** in the empty state to load the real nested table excerpt, or
+Click **Load sample** in the empty state to load a page that exercises a nested table, or
 **Start blank** to build a new page from the Insert menu.
 
-Like `cable-map`, this is a relative-base SPA, so it can later be packaged behind the EDA HTTP
-proxy if it should ship as an in-cluster app. It is fully client-side and needs no backend.
+This is a relative-base SPA, so it can be hosted under any sub-path. It is fully client-side and
+needs no backend.

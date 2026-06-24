@@ -55,7 +55,7 @@ key: value
 
 - [Install](install.md)
 
-    Install EDA.
+    Install the app.
 
 - **Operate**
 
@@ -99,14 +99,14 @@ if (!ok) {
 // Spot-check the structure we expect from the sample.
 const tables = a.filter((s) => s.type === 'htmlTable')
 const outer = tables[0] && tables[0].type === 'htmlTable' ? tables[0].table : null
-const machines = outer?.rows.find((r) => r.cells[0]?.blocks.some((bk) => bk.type === 'text' && bk.md.includes('machines')))
-const nested = machines?.cells[1]?.blocks.some((bk) => bk.type === 'table')
+const services = outer?.rows.find((r) => r.cells[0]?.blocks.some((bk) => bk.type === 'text' && bk.md.includes('services')))
+const nested = services?.cells[1]?.blocks.some((bk) => bk.type === 'table')
 const callouts = a.filter((s) => s.type === 'admonition').length
 const tabsets = a.filter((s) => s.type === 'tabset').length
 const details = a.filter((s) => s.type === 'details').length
 console.log(`tables: ${tables.length}, header cols: ${outer?.header.length}, rows: ${outer?.rows.length}, nested sub-table present: ${nested}`)
 console.log(`structured blocks: admonitions=${callouts}, tabsets=${tabsets}, details=${details}`)
-if (!nested) { console.error('FAIL: expected a nested sub-table in the machines cell'); process.exit(1) }
+if (!nested) { console.error('FAIL: expected a nested sub-table in the services cell'); process.exit(1) }
 if (callouts < 1 || tabsets < 1 || details < 1) {
   console.error('FAIL: expected sample admonition, tabset, and details blocks to be structured')
   process.exit(1)

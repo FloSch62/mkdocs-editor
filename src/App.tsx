@@ -116,7 +116,7 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
 
   return (
     <div className="app-shell">
-      <AppBar position="static" color="default" elevation={0} sx={{ borderBottom: '1px solid var(--line)', background: 'var(--panel)' }}>
+      <AppBar position="static" color="default" elevation={0} sx={{ borderBottom: '1px solid var(--line)', background: 'var(--sidebar)' }}>
         <Toolbar variant="dense" sx={{ gap: 1 }}>
           <AutoAwesomeMosaicIcon sx={{ color: 'var(--accent)' }} />
           <Typography variant="subtitle1" sx={{ fontWeight: 600, mr: 2 }}>
@@ -193,7 +193,7 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
                 Start blank
               </Button>
               <Button variant="outlined" onClick={() => { setPaste(SAMPLE); load(SAMPLE) }}>
-                Load EDAADM sample
+                Load sample
               </Button>
             </Box>
           </Box>

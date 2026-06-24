@@ -1,9 +1,9 @@
-// A trimmed excerpt of the real "menace": the EDAADM configuration file fields table from
-// nokia-eda/docs (setting-up-the-eda-virtual-machine-nodes.md). Includes a nested sub-table
-// inside the `machines` cell — the case Excel-style editors can't represent.
-export const SAMPLE = `## EDAADM configuration file fields
+// A generic sample page that exercises the trickier blocks — in particular a nested
+// `pymdownx.blocks.html` table (a sub-table inside the `services` cell), which is the
+// case plain Excel-style table editors can't represent.
+export const SAMPLE = `## Configuration file fields
 
-The EDAADM configuration file is a YAML file that describes your Talos Kubernetes environment.
+The configuration file is a YAML document that describes your deployment.
 
 /// html | table
 //// html | th[style='text-align: center;']
@@ -18,46 +18,46 @@ Description
 \`version\`
 /////
 ///// html | td
-The version of the Nokia EDA environment to be deployed.
-Example: 25.4.1
+The schema version of the configuration file.
+Example: \`1.4\`
 /////
 ////
 
 //// html | tr
 ///// html | td
-\`clusterName\`
+\`name\`
 /////
 ///// html | td
-The name of your Nokia EDA environment.
-Example: \`eda-production-cluster\`
+A human-readable name for the deployment.
+Example: \`production\`
 /////
 ////
 
 //// html | tr
 ///// html | td
-\`machines\`
+\`services\`
 /////
 ///// html | td
-A list of Kubernetes nodes. Each Kubernetes node has the following settings:
+A list of services to run. Each service has the following settings:
 
 ////// html | table
 
 /////// html | tr
 //////// html | td
-\`name\`
+\`image\`
 ////////
 //////// html | td
-The name of a node.
-Example: \`eda-node01\`
+The container image to deploy.
+Example: \`registry.example.com/app:latest\`
 ////////
 ///////
 
 /////// html | tr
 //////// html | td
-\`endpoint\`
+\`port\`
 ////////
 //////// html | td
-The IP address on which the node is reachable for Talos to control. Optional.
+The port the service listens on. Optional.
 ////////
 ///////
 
@@ -69,29 +69,28 @@ The IP address on which the node is reachable for Talos to control. Optional.
 After the table, normal prose continues here.
 
 /// note | Heads up
-The \`edaadm\` tool must run with the same version as your target environment.
+Keep the configuration file in version control so changes are reviewable.
 ///
 
 ## Generating the configuration
 
-/// tab | Internet based installation
+/// tab | Quick start
 
---8<-- "docs/software-install/resources/edaadm-config-example.yaml"
+--8<-- "docs/resources/config-example.yaml"
 ///
 
-/// tab | Air-gapped installation
+/// tab | Custom registry
 
---8<-- "docs/software-install/resources/edaadm-config-example.yaml"
+--8<-- "docs/resources/config-example.yaml"
 
 \`\`\`yaml
-mirror:
-  name: 192.0.2.228
-  url: https://192.0.2.228
-  insecure: true
+registry:
+  url: https://registry.example.com
+  insecure: false
 \`\`\`
 ///
 
 /// details | Advanced options
-Set \`--client-cert-duration\` to change the Talos client certificate lifetime.
+Set \`--reload-interval\` to change how often the configuration is re-read.
 ///
 `
