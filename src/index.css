@@ -9,7 +9,7 @@
   --line: rgba(255, 255, 255, 0.08);
   --fg: #e6e6ea;
   --muted: #9d9da7;
-  --accent: #6e8bfb;
+  --accent: #fbbf24;
   --accent-2: #2dd4bf;
   color-scheme: dark;
 }
@@ -21,7 +21,7 @@
   --line: rgba(0, 0, 0, 0.08);
   --fg: #1c1c21;
   --muted: #6e6e78;
-  --accent: #3b66f5;
+  --accent: #d97706;
   --accent-2: #0d9488;
   color-scheme: light;
 }

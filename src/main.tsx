@@ -8,7 +8,7 @@ import App from './App.tsx'
 export type Mode = 'light' | 'dark'
 
 const dark = {
-  primary: '#6e8bfb',
+  primary: '#fbbf24',
   secondary: '#2dd4bf',
   bgDefault: '#1b1b1f',
   bgPaper: '#232328',
@@ -26,7 +26,7 @@ const dark = {
 } as const
 
 const light = {
-  primary: '#3b66f5',
+  primary: '#d97706',
   secondary: '#0d9488',
   bgDefault: '#fafafa',
   bgPaper: '#ffffff',
