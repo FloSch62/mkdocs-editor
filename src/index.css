@@ -1,28 +1,97 @@
-/* Global theme tokens. Colours are exposed as CSS custom properties so the plain-CSS
-   chrome in app.css flips between light and dark in lockstep with the MUI theme.
-   Dark mode is the default; light mode is toggled by data-theme="light" on <html>. */
+/* Zensical theme tokens.
+   The editor borrows zensical's (Material for MkDocs successor) own colour system so the
+   chrome and the rendered content read like a published zensical docs page. The `--md-*`
+   custom properties mirror zensical's `slate` (dark) and `default` (light) palettes verbatim
+   — driven by `--md-hue` — and the editor's semantic vars (`--bg/--panel/--line/…`) are
+   mapped onto them. Brand accent is zensical orange (#ff7735). Dark (slate) is the default;
+   `:root[data-theme='light']` flips to the default scheme. */
 
 :root {
-  --bg: #1b1b1f;
-  --sidebar: #151518;
-  --panel: #232328;
-  --line: rgba(255, 255, 255, 0.08);
-  --fg: #e6e6ea;
-  --muted: #9d9da7;
-  --accent: #fbbf24;
-  --accent-2: #2dd4bf;
+  /* ---- zensical brand (shared across schemes) ---- */
+  --md-primary-fg-color: #ff7735;
+  --md-primary-fg-color--light: #ff9457;
+  --md-primary-fg-color--dark: #f15a12;
+  --md-primary-bg-color: #fff;
+  --md-accent-fg-color: #ff9457;
+  --md-accent-fg-color--transparent: rgba(255, 119, 53, 0.1);
+
+  /* ---- slate (dark) scheme — zensical defaults, hue 225 ---- */
+  --md-hue: 225;
+  --md-default-fg-color: hsla(var(--md-hue), 15%, 90%, 0.82);
+  --md-default-fg-color--light: hsla(var(--md-hue), 15%, 90%, 0.56);
+  --md-default-fg-color--lighter: hsla(var(--md-hue), 15%, 90%, 0.32);
+  --md-default-fg-color--lightest: hsla(var(--md-hue), 15%, 90%, 0.12);
+  --md-default-bg-color: hsla(var(--md-hue), 15%, 5%, 1);
+  --md-default-bg-color--light: hsla(var(--md-hue), 15%, 5%, 0.54);
+  --md-default-bg-color--lighter: hsla(var(--md-hue), 15%, 5%, 0.26);
+  --md-default-bg-color--lightest: hsla(var(--md-hue), 15%, 5%, 0.07);
+  --md-code-fg-color: hsla(var(--md-hue), 20%, 80%, 1);
+  --md-code-bg-color: hsla(var(--md-hue), 20%, 10%, 1);
+  --md-typeset-color: var(--md-default-fg-color);
+  --md-typeset-a-color: var(--md-primary-fg-color);
+  --md-typeset-mark-color: #4287ff4d;
+  --md-typeset-kbd-color: hsla(var(--md-hue), 15%, 90%, 0.12);
+  --md-typeset-kbd-accent-color: hsla(var(--md-hue), 15%, 90%, 0.2);
+  --md-typeset-kbd-border-color: hsla(var(--md-hue), 15%, 14%, 1);
+  --md-typeset-table-color: hsla(var(--md-hue), 15%, 95%, 0.12);
+  --md-typeset-table-color--light: hsla(var(--md-hue), 15%, 95%, 0.035);
+
+  /* elevated editor surface (cards, inputs) — one step off the page background */
+  --zx-surface: hsla(var(--md-hue), 16%, 9%, 1);
+  --zx-surface-hover: hsla(var(--md-hue), 15%, 90%, 0.04);
+
+  /* ---- editor semantic vars, mapped onto the zensical palette ---- */
+  --bg: var(--md-default-bg-color);
+  --sidebar: var(--md-default-bg-color);
+  --panel: var(--zx-surface);
+  --line: var(--md-default-fg-color--lightest);
+  --fg: var(--md-default-fg-color);
+  --muted: var(--md-default-fg-color--light);
+  --accent: var(--md-primary-fg-color);
+  --accent-2: var(--md-accent-fg-color);
+  --code-bg: var(--md-code-bg-color);
+  --code-fg: var(--md-code-fg-color);
+  --header-bg: #07080a;
+  --header-fg: #fff;
+
   color-scheme: dark;
 }
 
 :root[data-theme='light'] {
-  --bg: #fafafa;
-  --sidebar: #f4f4f5;
-  --panel: #ffffff;
-  --line: rgba(0, 0, 0, 0.08);
-  --fg: #1c1c21;
-  --muted: #6e6e78;
-  --accent: #d97706;
-  --accent-2: #0d9488;
+  /* ---- default (light) scheme — zensical/Material defaults ---- */
+  --md-default-fg-color: rgba(0, 0, 0, 0.87);
+  --md-default-fg-color--light: rgba(0, 0, 0, 0.54);
+  --md-default-fg-color--lighter: rgba(0, 0, 0, 0.32);
+  --md-default-fg-color--lightest: rgba(0, 0, 0, 0.07);
+  --md-default-bg-color: #fff;
+  --md-default-bg-color--light: rgba(255, 255, 255, 0.7);
+  --md-default-bg-color--lighter: rgba(255, 255, 255, 0.45);
+  --md-default-bg-color--lightest: rgba(255, 255, 255, 0.12);
+  --md-code-fg-color: #36464e;
+  --md-code-bg-color: #f5f5f5;
+  --md-typeset-color: var(--md-default-fg-color);
+  --md-typeset-a-color: var(--md-primary-fg-color);
+  --md-typeset-mark-color: #ffff0080;
+  --md-typeset-kbd-color: #f0fdf2;
+  --md-typeset-kbd-accent-color: #fff;
+  --md-typeset-kbd-border-color: #b8c0c2;
+  --md-typeset-table-color: rgba(0, 0, 0, 0.12);
+  --md-typeset-table-color--light: rgba(0, 0, 0, 0.035);
+
+  --zx-surface: #fff;
+  --zx-surface-hover: rgba(0, 0, 0, 0.03);
+
+  --bg: var(--md-default-bg-color);
+  --sidebar: #fafafa;
+  --panel: var(--zx-surface);
+  --line: var(--md-default-fg-color--lightest);
+  --fg: var(--md-default-fg-color);
+  --muted: var(--md-default-fg-color--light);
+  --code-bg: var(--md-code-bg-color);
+  --code-fg: var(--md-code-fg-color);
+  --header-bg: #07080a;
+  --header-fg: #fff;
+
   color-scheme: light;
 }
 

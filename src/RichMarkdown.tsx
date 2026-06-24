@@ -184,16 +184,17 @@ function Admonition({ kind, title, nodes }: { kind: string; title: string | null
   return (
     <Box
       sx={{
-        my: 1.5, borderRadius: 1.5, overflow: 'hidden',
-        border: '1px solid var(--line)', borderLeft: `4px solid ${color}`,
-        background: `color-mix(in srgb, ${color} 9%, var(--panel))`,
+        my: '1.5625em', fontSize: '12.8px',
+        borderRadius: '8px', borderLeft: `3px solid ${color}`,
+        background: `color-mix(in srgb, ${color} 10%, var(--md-default-bg-color))`,
+        px: '0.9rem', pt: '0.3rem', pb: '0.6rem',
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, py: 1, fontWeight: 600 }}>
-        <Icon sx={{ color, fontSize: 20 }} />
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: '0.4em', mb: '0.7em', fontWeight: 700, color: 'var(--md-default-fg-color)' }}>
+        <Icon sx={{ color, fontSize: 18 }} />
         <span style={{ textTransform: title ? 'none' : 'capitalize' }}>{title ?? kind}</span>
       </Box>
-      <Box sx={{ px: 1.5, pb: 1, '& .prose:first-of-type': { mt: 0 } }}>
+      <Box sx={{ '& > .prose:first-of-type': { mt: 0 }, '& > .prose:last-of-type': { mb: 0 } }}>
         <RichNodes nodes={nodes} />
       </Box>
     </Box>
@@ -205,9 +206,9 @@ function Details({ title, nodes }: { title: string | null; nodes: RichNode[] }) 
     <Accordion
       disableGutters
       elevation={0}
-      sx={{ my: 1.5, border: '1px solid var(--line)', borderRadius: '8px !important', background: 'var(--panel)', '&:before': { display: 'none' } }}
+      sx={{ my: '1.5625em', border: '1px solid var(--line)', borderRadius: '8px !important', background: 'var(--panel)', '&:before': { display: 'none' } }}
     >
-      <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ fontWeight: 600, minHeight: 44 }}>
+      <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ fontWeight: 700, minHeight: 44 }}>
         {title ?? 'Details'}
       </AccordionSummary>
       <AccordionDetails sx={{ pt: 0 }}>
@@ -220,13 +221,13 @@ function Details({ title, nodes }: { title: string | null; nodes: RichNode[] }) 
 function TabGroup({ tabs }: { tabs: Array<{ title: string; children: RichNode[] }> }) {
   const [val, setVal] = useState(0)
   return (
-    <Box sx={{ my: 1.5, border: '1px solid var(--line)', borderRadius: 2, overflow: 'hidden', background: 'var(--panel)' }}>
+    <Box sx={{ my: '1em', border: '1px solid var(--line)', borderRadius: '8px', overflow: 'hidden', background: 'transparent' }}>
       <Tabs
         value={val}
         onChange={(_, v) => setVal(v)}
         variant="scrollable"
         scrollButtons="auto"
-        sx={{ minHeight: 42, borderBottom: '1px solid var(--line)', px: 1 }}
+        sx={{ minHeight: 42, borderBottom: '1px solid var(--line)', px: 1, background: 'var(--zx-surface-hover)' }}
       >
         {tabs.map((t, i) => (
           <Tab key={i} label={t.title} sx={{ minHeight: 42, textTransform: 'none', fontWeight: 500 }} />

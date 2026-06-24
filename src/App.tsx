@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AppBar,
   Box,
@@ -18,7 +18,18 @@ import DarkModeIcon from '@mui/icons-material/DarkMode'
 import CodeIcon from '@mui/icons-material/Code'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import DownloadIcon from '@mui/icons-material/Download'
-import AutoAwesomeMosaicIcon from '@mui/icons-material/AutoAwesomeMosaic'
+import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined'
+import NotesOutlinedIcon from '@mui/icons-material/NotesOutlined'
+import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined'
+import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined'
+import UnfoldMoreOutlinedIcon from '@mui/icons-material/UnfoldMoreOutlined'
+import TabOutlinedIcon from '@mui/icons-material/TabOutlined'
+import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined'
+import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined'
+import LinkIcon from '@mui/icons-material/Link'
+import GridViewOutlinedIcon from '@mui/icons-material/GridViewOutlined'
+import RawOnIcon from '@mui/icons-material/RawOn'
+import type { SvgIconComponent } from '@mui/icons-material'
 import type { Mode } from './main.tsx'
 import {
   type DocBlock,
@@ -28,6 +39,7 @@ import {
   serializeDocument,
 } from './blocks.ts'
 import BlockEditor from './BlockEditor.tsx'
+import ZensicalLogo from './ZensicalLogo.tsx'
 import { SAMPLE } from './sample.ts'
 
 const clone = <T,>(v: T): T => structuredClone(v)
@@ -62,11 +74,67 @@ const INSERT_GROUPS: Array<{ label: string; items: Array<{ kind: InsertKind; lab
   },
 ]
 
+// ---- document outline (left rail) ----
+const OUTLINE_ICON: Record<DocBlock['type'], SvgIconComponent> = {
+  markdown: NotesOutlinedIcon,
+  frontmatter: ArticleOutlinedIcon,
+  htmlTable: TableChartOutlinedIcon,
+  markdownTable: TableChartOutlinedIcon,
+  admonition: WarningAmberOutlinedIcon,
+  details: UnfoldMoreOutlinedIcon,
+  tabset: TabOutlinedIcon,
+  snippet: DescriptionOutlinedIcon,
+  code: CodeIcon,
+  image: ImageOutlinedIcon,
+  button: LinkIcon,
+  grid: GridViewOutlinedIcon,
+  raw: RawOnIcon,
+}
+
+function firstHeading(text: string): string | null {
+  const m = text.match(/^#{1,6}\s+(.+?)\s*#*\s*$/m)
+  return m ? m[1].replace(/[*`_]/g, '').trim() : null
+}
+function firstLine(text: string): string {
+  const line = text.trim().split('\n').find((l) => l.trim()) ?? ''
+  const clean = line.replace(/[#*`_>]/g, '').trim()
+  return clean.length > 42 ? `${clean.slice(0, 40)}…` : clean
+}
+
+function outlineLabel(block: DocBlock): string {
+  switch (block.type) {
+    case 'markdown': return firstHeading(block.text) ?? firstLine(block.text) ?? 'Paragraph'
+    case 'frontmatter': return String(block.data.title ?? 'Front matter')
+    case 'htmlTable': return 'Nested table'
+    case 'markdownTable': return 'Data table'
+    case 'admonition': return block.title || block.kind
+    case 'details': return block.title || 'Details'
+    case 'tabset': return block.tabs.map((t) => t.title).filter(Boolean).join(' / ') || 'Tabs'
+    case 'snippet': return block.path
+    case 'code': return block.title || `Code · ${block.lang || 'text'}`
+    case 'image': return block.alt || 'Image'
+    case 'button': return block.text || 'Button'
+    case 'grid': return 'Grid cards'
+    case 'raw': return block.label || 'Raw block'
+  }
+}
+
+interface TocEntry { id: string; text: string; level: number }
+
+const scrollToId = (id: string) =>
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+
 export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: () => void }) {
   const [blocks, setBlocks] = useState<DocBlock[] | null>(null)
   const [paste, setPaste] = useState('')
   const [showSource, setShowSource] = useState(false)
   const [insertAnchor, setInsertAnchor] = useState<HTMLElement | null>(null)
+
+  const mainRef = useRef<HTMLDivElement | null>(null)
+  const contentRef = useRef<HTMLDivElement | null>(null)
+  const [toc, setToc] = useState<TocEntry[]>([])
+  const [activeHeading, setActiveHeading] = useState<string | null>(null)
+  const [activeBlock, setActiveBlock] = useState<number | null>(null)
 
   const markdown = useMemo(() => (blocks ? serializeDocument(blocks) : ''), [blocks])
 
@@ -114,17 +182,54 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
     URL.revokeObjectURL(a.href)
   }
 
+  // Collect the on-page headings and wire scroll-spy for both the TOC and the outline.
+  // Re-runs whenever the rendered markdown changes.
+  useEffect(() => {
+    const content = contentRef.current
+    const scroller = mainRef.current
+    if (!content || !scroller) { setToc([]); return }
+
+    const headingEls = Array.from(
+      content.querySelectorAll('.prose h1, .prose h2, .prose h3'),
+    ) as HTMLElement[]
+    headingEls.forEach((el, i) => { if (!el.id) el.id = `zx-h-${i}` })
+    setToc(headingEls.map((el) => ({
+      id: el.id,
+      text: el.textContent?.trim() || 'Untitled',
+      level: Number(el.tagName[1]),
+    })))
+
+    const blockEls = Array.from(content.querySelectorAll('[data-zx-block]')) as HTMLElement[]
+    const visibleH = new Set<Element>()
+    const visibleB = new Set<Element>()
+    const headingObs = new IntersectionObserver((entries) => {
+      entries.forEach((e) => (e.isIntersecting ? visibleH.add(e.target) : visibleH.delete(e.target)))
+      const top = headingEls.find((el) => visibleH.has(el))
+      if (top) setActiveHeading(top.id)
+    }, { root: scroller, rootMargin: '-64px 0px -72% 0px', threshold: 0 })
+    const blockObs = new IntersectionObserver((entries) => {
+      entries.forEach((e) => (e.isIntersecting ? visibleB.add(e.target) : visibleB.delete(e.target)))
+      const top = blockEls.find((el) => visibleB.has(el))
+      if (top) setActiveBlock(Number(top.dataset.zxBlock))
+    }, { root: scroller, rootMargin: '-64px 0px -72% 0px', threshold: 0 })
+    headingEls.forEach((el) => headingObs.observe(el))
+    blockEls.forEach((el) => blockObs.observe(el))
+    return () => { headingObs.disconnect(); blockObs.disconnect() }
+  }, [markdown])
+
+  const bodyClass = showSource ? 'with-source' : toc.length ? '' : 'no-toc'
+
   return (
     <div className="app-shell">
-      <AppBar position="static" color="default" elevation={0} sx={{ borderBottom: '1px solid var(--line)', background: 'var(--sidebar)' }}>
+      <AppBar className="zx-header" position="static" elevation={0}>
         <Toolbar variant="dense" sx={{ gap: 1 }}>
-          <AutoAwesomeMosaicIcon sx={{ color: 'var(--accent)' }} />
-          <Typography variant="subtitle1" sx={{ fontWeight: 600, mr: 2 }}>
-            MkDocs / Zensical Editor
-          </Typography>
-          <Typography variant="caption" sx={{ color: 'var(--muted)', flexGrow: 1 }}>
-            build Material docs blocks visually, including nested tables
-          </Typography>
+          <Box className="zx-brand">
+            <ZensicalLogo size={24} className="zx-brand-logo" />
+            <Typography variant="subtitle1" className="zx-brand-name">
+              Zensical <span className="zx-brand-sep">Editor</span>
+            </Typography>
+          </Box>
+          <Box className="zx-header-spacer" />
           {blocks && (
             <>
               <Button size="small" startIcon={<AddIcon />} onClick={(e) => setInsertAnchor(e.currentTarget)}>
@@ -144,7 +249,7 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
                 ))}
               </Menu>
               <Tooltip title="Toggle markdown source">
-                <IconButton size="small" color={showSource ? 'primary' : 'default'} onClick={() => setShowSource((v) => !v)}>
+                <IconButton size="small" onClick={() => setShowSource((v) => !v)}>
                   <CodeIcon />
                 </IconButton>
               </Tooltip>
@@ -172,6 +277,7 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
       {!blocks ? (
         <div className="empty-state">
           <Box sx={{ display: 'grid', gap: 2, justifyItems: 'center' }}>
+            <ZensicalLogo size={56} gradient className="empty-logo" />
             <Typography variant="h6">Paste MkDocs / Zensical markdown</Typography>
             <Typography variant="body2" sx={{ color: 'var(--muted)', maxWidth: 640 }}>
               Open an existing page or start from a blank document. Zensical slash blocks,
@@ -199,10 +305,26 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
           </Box>
         </div>
       ) : (
-        <div className={`app-body${showSource ? '' : ' single'}`}>
-          <div className="pane">
-            <div className="pane-title">Visual editor · add blocks from the Insert menu</div>
-            <div className="doc">
+        <div className={`zx-body ${bodyClass}`}>
+          <nav className="zx-sidebar zx-sidebar--primary">
+            <div className="zx-side-title">Document</div>
+            {blocks.map((block, i) => {
+              const Icon = OUTLINE_ICON[block.type]
+              return (
+                <button
+                  key={i}
+                  className={`zx-nav-item${activeBlock === i ? ' active' : ''}`}
+                  onClick={() => scrollToId(`zx-block-${i}`)}
+                >
+                  <Icon className="zx-nav-ico" />
+                  <span className="zx-nav-label">{outlineLabel(block)}</span>
+                </button>
+              )
+            })}
+          </nav>
+
+          <main className="zx-main" ref={mainRef}>
+            <div className={`zx-content${showSource ? ' wide' : ''}`} ref={contentRef}>
               {blocks.length === 0 ? (
                 <Box className="empty-doc">
                   <Typography variant="body2" sx={{ color: 'var(--muted)' }}>This document is empty.</Typography>
@@ -212,24 +334,26 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
                 </Box>
               ) : (
                 blocks.map((block, i) => (
-                  <BlockEditor
-                    key={i}
-                    block={block}
-                    index={i}
-                    total={blocks.length}
-                    onChange={(next) => updateBlock(i, next)}
-                    onInsertAfter={() => insertBlockAt(i + 1, newBlock('markdown'))}
-                    onDuplicate={() => duplicateBlock(i)}
-                    onDelete={() => deleteBlock(i)}
-                    onMove={(dir) => moveBlock(i, dir)}
-                  />
+                  <div key={i} id={`zx-block-${i}`} data-zx-block={i}>
+                    <BlockEditor
+                      block={block}
+                      index={i}
+                      total={blocks.length}
+                      onChange={(next) => updateBlock(i, next)}
+                      onInsertAfter={() => insertBlockAt(i + 1, newBlock('markdown'))}
+                      onDuplicate={() => duplicateBlock(i)}
+                      onDelete={() => deleteBlock(i)}
+                      onMove={(dir) => moveBlock(i, dir)}
+                    />
+                  </div>
                 ))
               )}
             </div>
-          </div>
-          {showSource && (
-            <div className="pane">
-              <div className="pane-title">Markdown source · regenerated on every edit</div>
+          </main>
+
+          {showSource ? (
+            <div className="zx-source-pane">
+              <div className="zx-source-title">Markdown source · regenerated on every edit</div>
               <textarea
                 className="source"
                 value={markdown}
@@ -237,6 +361,25 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
                 spellCheck={false}
               />
             </div>
+          ) : (
+            <aside className="zx-sidebar zx-sidebar--secondary">
+              <div className="zx-side-title">On this page</div>
+              <div className="zx-toc-list">
+                {toc.length === 0 ? (
+                  <div className="zx-toc-empty">No headings yet</div>
+                ) : (
+                  toc.map((entry) => (
+                    <button
+                      key={entry.id}
+                      className={`zx-toc-item lvl-${entry.level}${activeHeading === entry.id ? ' active' : ''}`}
+                      onClick={() => scrollToId(entry.id)}
+                    >
+                      {entry.text}
+                    </button>
+                  ))
+                )}
+              </div>
+            </aside>
           )}
         </div>
       )}

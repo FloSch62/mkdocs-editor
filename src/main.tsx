@@ -7,40 +7,42 @@ import App from './App.tsx'
 
 export type Mode = 'light' | 'dark'
 
+// zensical slate (dark) — hue 225, brand orange #ff7735
 const dark = {
-  primary: '#fbbf24',
-  secondary: '#2dd4bf',
-  bgDefault: '#1b1b1f',
-  bgPaper: '#232328',
-  sidebar: '#151518',
-  divider: 'rgba(255, 255, 255, 0.08)',
-  textPrimary: '#e6e6ea',
-  textSecondary: '#9d9da7',
-  success: '#4ade80',
-  warning: '#e7b341',
-  error: '#f87171',
-  info: '#60a5fa',
-  scrollThumb: 'rgba(255, 255, 255, 0.16)',
-  scrollThumbHover: 'rgba(255, 255, 255, 0.30)',
-  tooltipBg: '#2e2e34',
+  primary: '#ff7735',
+  secondary: '#ff9457',
+  bgDefault: 'hsl(225, 15%, 5%)',
+  bgPaper: 'hsl(225, 16%, 9%)',
+  sidebar: 'hsl(225, 15%, 5%)',
+  divider: 'hsla(225, 15%, 90%, 0.12)',
+  textPrimary: 'hsla(225, 15%, 90%, 0.9)',
+  textSecondary: 'hsla(225, 15%, 90%, 0.56)',
+  success: '#00c853',
+  warning: '#ff9100',
+  error: '#ff5252',
+  info: '#00b8d4',
+  scrollThumb: 'hsla(225, 15%, 90%, 0.16)',
+  scrollThumbHover: 'hsla(225, 15%, 90%, 0.3)',
+  tooltipBg: 'hsl(225, 15%, 16%)',
 } as const
 
+// zensical default (light) — Material defaults, brand orange #ff7735
 const light = {
-  primary: '#d97706',
-  secondary: '#0d9488',
-  bgDefault: '#fafafa',
+  primary: '#ff7735',
+  secondary: '#f15a12',
+  bgDefault: '#ffffff',
   bgPaper: '#ffffff',
-  sidebar: '#f4f4f5',
-  divider: 'rgba(0, 0, 0, 0.08)',
-  textPrimary: '#1c1c21',
-  textSecondary: '#6e6e78',
-  success: '#16a34a',
-  warning: '#b07a10',
-  error: '#dc2626',
-  info: '#2563eb',
+  sidebar: '#fafafa',
+  divider: 'rgba(0, 0, 0, 0.09)',
+  textPrimary: 'rgba(0, 0, 0, 0.87)',
+  textSecondary: 'rgba(0, 0, 0, 0.54)',
+  success: '#00b341',
+  warning: '#e67700',
+  error: '#e53935',
+  info: '#0097a7',
   scrollThumb: 'rgba(0, 0, 0, 0.18)',
   scrollThumbHover: 'rgba(0, 0, 0, 0.34)',
-  tooltipBg: '#2e2e34',
+  tooltipBg: 'hsl(225, 15%, 16%)',
 } as const
 
 const makeTheme = (mode: Mode) => {
@@ -89,7 +91,7 @@ const makeTheme = (mode: Mode) => {
       },
       MuiAppBar: {
         defaultProps: { elevation: 0 },
-        styleOverrides: { root: { backgroundColor: c.sidebar } },
+        styleOverrides: { root: { backgroundColor: 'var(--header-bg)', color: 'var(--header-fg)' } },
       },
       MuiPaper: {
         defaultProps: { elevation: 0 },
@@ -131,7 +133,7 @@ const makeTheme = (mode: Mode) => {
       MuiTabs: {
         styleOverrides: {
           root: { minHeight: 40 },
-          indicator: { height: 2, borderRadius: '2px 2px 0 0', backgroundColor: c.textPrimary },
+          indicator: { height: 2, borderRadius: '2px 2px 0 0', backgroundColor: c.primary },
         },
       },
     },

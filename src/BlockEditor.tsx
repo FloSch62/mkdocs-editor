@@ -25,6 +25,8 @@ import CodeIcon from '@mui/icons-material/Code'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlineOutlined'
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined'
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
 import FormatAlignCenterIcon from '@mui/icons-material/FormatAlignCenter'
 import FormatAlignLeftIcon from '@mui/icons-material/FormatAlignLeft'
 import FormatAlignRightIcon from '@mui/icons-material/FormatAlignRight'
@@ -54,7 +56,6 @@ import {
   newMarkdownTable,
   serializeDocument,
 } from './blocks.ts'
-import { renderMarkdown } from './markdown.ts'
 import RichMarkdown from './RichMarkdown.tsx'
 import TableEditor from './TableEditor.tsx'
 
@@ -101,6 +102,9 @@ function BlockShell({
   children,
   isFirst,
   isLast,
+  previewable,
+  editing,
+  onToggleEdit,
   onChange,
   onInsertAfter,
   onDuplicate,
@@ -111,6 +115,9 @@ function BlockShell({
   children: ReactNode
   isFirst: boolean
   isLast: boolean
+  previewable: boolean
+  editing: boolean
+  onToggleEdit: () => void
   onChange: (b: DocBlock) => void
   onInsertAfter: () => void
   onDuplicate: () => void
@@ -119,13 +126,23 @@ function BlockShell({
 }) {
   const { title, detail, Icon } = blockTitle(block)
   return (
-    <Paper variant="outlined" className="block-card">
+    <Paper variant="outlined" className={`block-card block-${block.type}${editing ? ' is-editing' : ''}`}>
       <Box className="block-bar">
         <Icon sx={{ fontSize: 18, color: 'var(--accent)' }} />
         <Box sx={{ minWidth: 0, flexGrow: 1 }}>
           <Box className="block-title">{title}</Box>
           {detail && <Box className="block-detail">{detail}</Box>}
         </Box>
+        {previewable && (
+          <Button
+            size="small"
+            className="block-edit-toggle"
+            startIcon={editing ? <VisibilityOutlinedIcon sx={{ fontSize: 16 }} /> : <EditOutlinedIcon sx={{ fontSize: 16 }} />}
+            onClick={onToggleEdit}
+          >
+            {editing ? 'Done' : 'Edit'}
+          </Button>
+        )}
         {block.type !== 'raw' && (
           <Tooltip title="Convert this block to raw Markdown">
             <IconButton size="small" onClick={() => onChange({ type: 'raw', label: title.toLowerCase(), text: serializeDocument([block]) })}>
@@ -262,6 +279,48 @@ function MarkdownMiniEditor({
 
 function FieldGrid({ children }: { children: ReactNode }) {
   return <Box className="field-grid">{children}</Box>
+}
+
+// Serialize a block for preview, coercing slash-block syntax so RichMarkdown can render it
+// (it understands `///` blocks, not the classic `!!!` / `===` forms).
+function previewMarkdown(block: DocBlock): string {
+  let b: DocBlock = 'syntax' in block ? { ...block, syntax: 'zensical' } : block
+  // a collapsible admonition serializes to classic `???` syntax, which RichMarkdown can't
+  // render — show it as a static callout in the preview instead.
+  if (b.type === 'admonition') b = { ...b, collapse: 'none' }
+  return serializeDocument([b])
+}
+
+// Blocks that render their published docs output by default and reveal a form on Edit.
+const PREVIEWABLE = new Set<DocBlock['type']>(['markdown', 'admonition', 'details', 'tabset', 'code'])
+// Of those, the ones with no internal interactivity can also be clicked anywhere to edit;
+// tabs / details stay clickable for their own controls, so they edit via the toolbar button.
+const CLICK_TO_EDIT = new Set<DocBlock['type']>(['markdown', 'admonition', 'code'])
+
+// Rendered docs output for a previewable block. Click-to-edit where it won't fight the
+// block's own controls; otherwise the toolbar Edit button is the way in.
+function RenderedPreview({ block, onEdit }: { block: DocBlock; onEdit: () => void }) {
+  const md = previewMarkdown(block)
+  const body = md.trim()
+    ? <RichMarkdown text={md} />
+    : <Box sx={{ color: 'var(--muted)', fontStyle: 'italic' }}>Empty {block.type} — choose Edit to add content</Box>
+  if (CLICK_TO_EDIT.has(block.type)) {
+    return (
+      <Box className="render-preview">
+        <Box
+          className="zx-prose-block"
+          role="button"
+          tabIndex={0}
+          onClick={onEdit}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onEdit() } }}
+        >
+          <span className="zx-edit-hint"><EditOutlinedIcon sx={{ fontSize: 12 }} /> Edit</span>
+          {body}
+        </Box>
+      </Box>
+    )
+  }
+  return <Box className="render-preview zx-render-first">{body}</Box>
 }
 
 function FrontmatterEditor({ block, onChange }: { block: Extract<DocBlock, { type: 'frontmatter' }>; onChange: (b: DocBlock) => void }) {
@@ -472,14 +531,7 @@ function GridEditor({ block, onChange }: { block: Extract<DocBlock, { type: 'gri
 function blockEditorBody(block: DocBlock, onChange: (b: DocBlock) => void): ReactNode {
   switch (block.type) {
     case 'markdown':
-      return (
-        <>
-          <Box className="render-preview">
-            <RichMarkdown text={block.text} />
-          </Box>
-          <MarkdownMiniEditor value={block.text} onChange={(text) => onChange({ ...block, text })} />
-        </>
-      )
+      return <MarkdownMiniEditor value={block.text} onChange={(text) => onChange({ ...block, text })} />
     case 'frontmatter':
       return <FrontmatterEditor block={block} onChange={onChange} />
     case 'htmlTable':
@@ -505,10 +557,6 @@ function blockEditorBody(block: DocBlock, onChange: (b: DocBlock) => void): Reac
             </Select>
           </FieldGrid>
           <MarkdownMiniEditor label="Admonition content" value={block.body} onChange={(body) => onChange({ ...block, body })} />
-          <Box className={`admonition-preview ${block.kind}`}>
-            <Box className="admonition-preview-title">{block.title || block.kind}</Box>
-            <div dangerouslySetInnerHTML={{ __html: renderMarkdown(block.body) }} />
-          </Box>
         </>
       )
     case 'details':
@@ -609,19 +657,38 @@ export default function BlockEditor({
   onDelete: () => void
   onMove: (dir: -1 | 1) => void
 }) {
+  const previewable = PREVIEWABLE.has(block.type)
+  const [editing, setEditing] = useState(false)
+  const showForm = !previewable || editing
   return (
     <>
       <BlockShell
         block={block}
         isFirst={index === 0}
         isLast={index === total - 1}
+        previewable={previewable}
+        editing={editing}
+        onToggleEdit={() => setEditing((e) => !e)}
         onChange={onChange}
         onInsertAfter={onInsertAfter}
         onDuplicate={onDuplicate}
         onDelete={onDelete}
         onMove={onMove}
       >
-        {blockEditorBody(block, onChange)}
+        {showForm ? (
+          <>
+            {blockEditorBody(block, onChange)}
+            {previewable && editing && (
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
+                <Button size="small" startIcon={<VisibilityOutlinedIcon sx={{ fontSize: 16 }} />} onClick={() => setEditing(false)}>
+                  Done
+                </Button>
+              </Box>
+            )}
+          </>
+        ) : (
+          <RenderedPreview block={block} onEdit={() => setEditing(true)} />
+        )}
       </BlockShell>
       {index < total - 1 && <Divider className="block-divider" />}
     </>
