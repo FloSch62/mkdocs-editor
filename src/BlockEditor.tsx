@@ -125,8 +125,9 @@ function BlockShell({
   onMove: (dir: -1 | 1) => void
 }) {
   const { title, detail, Icon } = blockTitle(block)
+  const showForm = !previewable || editing
   return (
-    <Paper variant="outlined" className={`block-card block-${block.type}${editing ? ' is-editing' : ''}`}>
+    <Paper variant="outlined" className={`block-card block-${block.type} ${showForm ? 'mode-form' : 'mode-preview'}${editing ? ' is-editing' : ''}`}>
       <Box className="block-bar">
         <Icon sx={{ fontSize: 18, color: 'var(--accent)' }} />
         <Box sx={{ minWidth: 0, flexGrow: 1 }}>

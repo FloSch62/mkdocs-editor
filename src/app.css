@@ -415,7 +415,8 @@
   box-shadow: none !important;
 }
 
-/* floating hover toolbar (was the full-width block bar) */
+/* In rendered-preview mode the toolbar is a floating hover pill (top-right) so the content
+   reads like a docs page. In form mode (see below) it drops into the flow instead. */
 .block-bar {
   position: absolute;
   top: 2px;
@@ -435,7 +436,7 @@
   pointer-events: none;
   transition: opacity 0.12s, transform 0.12s;
 }
-.block-card:hover > .block-bar,
+.mode-preview.block-card:hover > .block-bar,
 .block-bar:focus-within {
   opacity: 1;
   transform: none;
@@ -467,30 +468,41 @@
 .block-body { padding: 0; }
 .block-divider { display: none !important; }
 
-/* a previewable block in edit mode: contain its form so it reads as an editor */
-.block-card.is-editing > .block-body {
-  margin: 10px 0 4px;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-left: 3px solid var(--md-primary-fg-color);
-  border-radius: 10px;
-  background: var(--panel);
+/* ---- form mode: toolbar drops into the flow as a strip above the form ----
+   This is why nothing overlaps: the action toolbar no longer floats over the
+   form's own toolbars (bold/italic/link, table Column/Row, etc.). */
+.block-card.mode-form > .block-bar {
+  position: static;
+  z-index: auto;
+  width: auto;
+  min-height: 36px;
+  margin: 16px 0 8px;
+  padding: 2px 4px;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+.block-card.is-editing > .block-bar {
+  border-bottom-color: color-mix(in srgb, var(--md-primary-fg-color) 45%, var(--line));
 }
 
-/* structured (form-based) blocks get a subtle panel so fields read as a group;
-   prose / admonition / table blocks stay flat so they read like the page. */
-.block-frontmatter > .block-body,
-.block-image > .block-body,
-.block-button > .block-body,
-.block-snippet > .block-body,
-.block-grid > .block-body,
-.block-raw > .block-body {
-  margin: 14px 0;
+/* form body panel — groups the fields. Tables carry their own card, so skip them. */
+.block-card.mode-form:not(.block-htmlTable):not(.block-markdownTable) > .block-body {
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--panel);
 }
+.block-card.is-editing.mode-form:not(.block-htmlTable):not(.block-markdownTable) > .block-body {
+  border-left: 3px solid var(--md-primary-fg-color);
+}
+/* the table editors already render as cards — don't double up the top margin */
+.block-card.mode-form > .block-body > .tbl-card { margin-top: 0; }
 
 /* spacing between consecutive flat prose blocks */
 .block-markdown + .block-markdown { margin-top: 0.2em; }
