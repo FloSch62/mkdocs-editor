@@ -18,6 +18,8 @@ import DarkModeIcon from '@mui/icons-material/DarkMode'
 import CodeIcon from '@mui/icons-material/Code'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import DownloadIcon from '@mui/icons-material/Download'
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined'
 import NotesOutlinedIcon from '@mui/icons-material/NotesOutlined'
 import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined'
@@ -39,6 +41,7 @@ import {
   serializeDocument,
 } from './blocks.ts'
 import BlockEditor from './BlockEditor.tsx'
+import DocPreview from './DocPreview.tsx'
 import ZensicalLogo from './ZensicalLogo.tsx'
 import { SAMPLE } from './sample.ts'
 
@@ -128,6 +131,7 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
   const [blocks, setBlocks] = useState<DocBlock[] | null>(null)
   const [paste, setPaste] = useState('')
   const [showSource, setShowSource] = useState(false)
+  const [preview, setPreview] = useState(false)
   const [insertAnchor, setInsertAnchor] = useState<HTMLElement | null>(null)
 
   const mainRef = useRef<HTMLDivElement | null>(null)
@@ -232,24 +236,37 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
           <Box className="zx-header-spacer" />
           {blocks && (
             <>
-              <Button size="small" startIcon={<AddIcon />} onClick={(e) => setInsertAnchor(e.currentTarget)}>
-                Insert
+              <Button
+                size="small"
+                variant="outlined"
+                className="zx-mode-toggle"
+                startIcon={preview ? <EditOutlinedIcon /> : <VisibilityOutlinedIcon />}
+                onClick={() => setPreview((v) => !v)}
+              >
+                {preview ? 'Edit' : 'Preview'}
               </Button>
-              <Menu anchorEl={insertAnchor} open={Boolean(insertAnchor)} onClose={() => setInsertAnchor(null)}>
-                {INSERT_GROUPS.map((group, groupIdx) => (
-                  <Box key={group.label}>
-                    {groupIdx > 0 && <Divider />}
-                    <ListSubheader>{group.label}</ListSubheader>
-                    {group.items.map((item) => (
-                      <MenuItem key={item.kind} onClick={() => appendBlock(item.kind)}>
-                        {item.label}
-                      </MenuItem>
+              {!preview && (
+                <>
+                  <Button size="small" startIcon={<AddIcon />} onClick={(e) => setInsertAnchor(e.currentTarget)}>
+                    Insert
+                  </Button>
+                  <Menu anchorEl={insertAnchor} open={Boolean(insertAnchor)} onClose={() => setInsertAnchor(null)}>
+                    {INSERT_GROUPS.map((group, groupIdx) => (
+                      <Box key={group.label}>
+                        {groupIdx > 0 && <Divider />}
+                        <ListSubheader>{group.label}</ListSubheader>
+                        {group.items.map((item) => (
+                          <MenuItem key={item.kind} onClick={() => appendBlock(item.kind)}>
+                            {item.label}
+                          </MenuItem>
+                        ))}
+                      </Box>
                     ))}
-                  </Box>
-                ))}
-              </Menu>
+                  </Menu>
+                </>
+              )}
               <Tooltip title="Toggle markdown source">
-                <IconButton size="small" onClick={() => setShowSource((v) => !v)}>
+                <IconButton size="small" className={showSource ? 'zx-toggle-active' : ''} onClick={() => setShowSource((v) => !v)}>
                   <CodeIcon />
                 </IconButton>
               </Tooltip>
@@ -324,7 +341,7 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
           </nav>
 
           <main className="zx-main" ref={mainRef}>
-            <div className={`zx-content${showSource ? ' wide' : ''}`} ref={contentRef}>
+            <div className={`zx-content${showSource ? ' wide' : ''}${preview ? ' zx-preview' : ''}`} ref={contentRef}>
               {blocks.length === 0 ? (
                 <Box className="empty-doc">
                   <Typography variant="body2" sx={{ color: 'var(--muted)' }}>This document is empty.</Typography>
@@ -332,6 +349,8 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
                     Add paragraph
                   </Button>
                 </Box>
+              ) : preview ? (
+                <DocPreview blocks={blocks} />
               ) : (
                 blocks.map((block, i) => (
                   <div key={i} id={`zx-block-${i}`} data-zx-block={i}>

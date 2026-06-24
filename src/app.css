@@ -28,6 +28,15 @@
 .zx-header .MuiButton-root { color: var(--header-fg); }
 .zx-header .MuiIconButton-root:hover,
 .zx-header .MuiButton-root:hover { background: rgba(255, 255, 255, 0.16); }
+/* the Edit ⇄ Preview mode toggle — the primary header control */
+.zx-header .zx-mode-toggle.MuiButton-root {
+  border-color: rgba(255, 255, 255, 0.4);
+  color: #fff;
+  font-weight: 600;
+}
+.zx-header .zx-mode-toggle.MuiButton-root:hover { border-color: #fff; background: rgba(255, 255, 255, 0.18); }
+/* show the markdown-source toggle as pressed when active */
+.zx-header .MuiIconButton-root.zx-toggle-active { background: rgba(255, 255, 255, 0.22); }
 
 /* ======================================================================
    Docs body grid:  [ outline ] [ reading column ] [ toc ]
@@ -313,6 +322,46 @@
 
 /* embedded markdown div results (pymdownx html blocks) */
 .prose .embed-result { margin-top: -0.75em; }
+
+/* buttons + grid cards (zensical docs output, shown in the real preview) */
+.prose .md-button {
+  display: inline-block;
+  margin: 0.4em 0;
+  padding: 0.5em 1.4em;
+  font-size: 0.875em;
+  font-weight: 700;
+  border-radius: 1.2rem;
+  text-decoration: none;
+  color: var(--md-default-fg-color--light);
+  background-color: var(--md-default-fg-color--lightest);
+  transition: color 0.125s, background-color 0.125s;
+}
+.prose .md-button:hover { color: #fff; background-color: var(--md-accent-fg-color); }
+.prose .md-button--primary { color: #fff; background-color: var(--md-primary-fg-color); }
+.prose .md-button--primary:hover { background-color: var(--md-accent-fg-color); }
+.prose .grid.cards > ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 0.6rem;
+  margin: 1em 0;
+  padding: 0;
+  list-style: none;
+}
+.prose .grid.cards > ul > li {
+  margin: 0;
+  padding: 0.8em 1.2em;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--zx-surface-hover);
+  transition: border-color 0.125s, box-shadow 0.125s;
+}
+.prose .grid.cards > ul > li:hover { border-color: var(--md-primary-fg-color); box-shadow: var(--zx-shadow-1); }
+.prose .grid.cards > ul > li > :first-child { margin-top: 0; }
+.prose .grid.cards > ul > li > :last-child { margin-bottom: 0; }
+
+/* real preview: chrome-free published render — give the blocks a steady vertical rhythm */
+.zx-preview > div + div { margin-top: 1.25em; }
+.zx-preview > div:empty { display: none; }
 
 /* ---- admonitions (`.admonition` HTML emitted by markdown.ts) ---- */
 /* zensical flat-tint look: tinted rounded box, bold title; the type sets the tint + rail. */
