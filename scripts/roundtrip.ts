@@ -4,6 +4,82 @@
 import { parseDocument, serializeDocument } from '../src/blocks.ts'
 import { SAMPLE } from '../src/sample.ts'
 
+const FEATURE_SAMPLE = `---
+title: Feature page
+description: Structured editing fixture
+hide:
+  - toc
+---
+
+# Feature page
+
+!!! warning "Classic warning"
+
+    Body with ==mark==.
+
+???+ tip "Open tip"
+
+    Keep this open.
+
+/// details | Extra
+    open: true
+
+Extra body.
+///
+
+=== "Linux"
+
+    \`\`\` bash
+    echo "/// note"
+    \`\`\`
+
+=== "macOS"
+
+    Use ++cmd+c++.
+
+| Method | Description |
+| :--- | ---: |
+| GET | Fetch |
+
+\`\`\` { .yaml .copy .select .linenums title="Config" hl_lines="1" }
+key: value
+\`\`\`
+
+--8<-- "docs/include.md"
+
+![Topology](assets/topology.png "Topology")
+
+[Launch](https://example.com){ .md-button .md-button--primary }
+
+/// html | div.grid.cards
+
+- [Install](install.md)
+
+    Install the app.
+
+- **Operate**
+
+    Run operations.
+///
+
+/// custom | keep me
+Do not model this.
+///
+`
+
+function assertStable(name: string, src: string) {
+  const first = parseDocument(src)
+  const round = serializeDocument(first)
+  const second = parseDocument(round)
+  if (JSON.stringify(first) !== JSON.stringify(second)) {
+    console.error(`FAIL: ${name} round-trip is not stable`)
+    console.error('first parse :', JSON.stringify(first))
+    console.error('second parse:', JSON.stringify(second))
+    process.exit(1)
+  }
+  return first
+}
+
 const a = parseDocument(SAMPLE)
 const round = serializeDocument(a)
 const b = parseDocument(round)
@@ -21,10 +97,28 @@ if (!ok) {
   process.exit(1)
 }
 // Spot-check the structure we expect from the sample.
-const tables = a.filter((s) => s.type === 'table')
-const outer = tables[0] && tables[0].type === 'table' ? tables[0].table : null
-const machines = outer?.rows.find((r) => r.cells[0]?.blocks.some((bk) => bk.type === 'text' && bk.md.includes('machines')))
-const nested = machines?.cells[1]?.blocks.some((bk) => bk.type === 'table')
+const tables = a.filter((s) => s.type === 'htmlTable')
+const outer = tables[0] && tables[0].type === 'htmlTable' ? tables[0].table : null
+const services = outer?.rows.find((r) => r.cells[0]?.blocks.some((bk) => bk.type === 'text' && bk.md.includes('services')))
+const nested = services?.cells[1]?.blocks.some((bk) => bk.type === 'table')
+const callouts = a.filter((s) => s.type === 'admonition').length
+const tabsets = a.filter((s) => s.type === 'tabset').length
+const details = a.filter((s) => s.type === 'details').length
 console.log(`tables: ${tables.length}, header cols: ${outer?.header.length}, rows: ${outer?.rows.length}, nested sub-table present: ${nested}`)
-if (!nested) { console.error('FAIL: expected a nested sub-table in the machines cell'); process.exit(1) }
-console.log('PASS: round-trip stable + nested table preserved')
+console.log(`structured blocks: admonitions=${callouts}, tabsets=${tabsets}, details=${details}`)
+if (!nested) { console.error('FAIL: expected a nested sub-table in the services cell'); process.exit(1) }
+if (callouts < 1 || tabsets < 1 || details < 1) {
+  console.error('FAIL: expected sample admonition, tabset, and details blocks to be structured')
+  process.exit(1)
+}
+
+const features = assertStable('feature fixture', FEATURE_SAMPLE)
+const expectedTypes = ['frontmatter', 'admonition', 'details', 'tabset', 'markdownTable', 'code', 'snippet', 'image', 'button', 'grid', 'raw']
+for (const type of expectedTypes) {
+  if (!features.some((block) => block.type === type)) {
+    console.error(`FAIL: expected feature fixture to include a structured ${type} block`)
+    process.exit(1)
+  }
+}
+console.log(`feature blocks: ${features.map((block) => block.type).join(', ')}`)
+console.log('PASS: round-trip stable + structured blocks preserved')
