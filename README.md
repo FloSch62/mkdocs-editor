@@ -1,61 +1,49 @@
-# MkDocs Table Editor
+# MkDocs / Zensical Editor
 
-A small EDA-family web app (sibling to `cable-map` and `topo-builder`) for **editing
-MkDocs / Zensical markdown — including the nested `pymdownx.blocks.html` tables — visually,
-in the preview**. You paste markdown, edit cells/paragraphs in place, and copy clean markdown
-back out. No slash-counting.
+A small EDA-family web app (sibling to `cable-map` and `topo-builder`) for visually authoring
+MkDocs Material / Zensical markdown. Paste a page, edit structured blocks, and copy or download
+clean markdown back out.
 
-## Why
+The original nested `pymdownx.blocks.html` table editor is still the strongest path: recursive
+tables are parsed into a real grid and serialized with slash depth recomputed. The app now also
+models the common authoring blocks users reach for when creating polished docs pages.
 
-Material for MkDocs authors complex tables with `pymdownx.blocks.html`, where **nesting depth
-is encoded as the number of slashes**:
+## What it edits
 
-```
-/// html | table
-//// html | th[style='text-align: center;']
-Top-level parameter
-////
-//// html | tr
-///// html | td
-`version`
-/////
-////
-///
-```
-
-A cell (`td`) can contain a whole nested `////// html | table`, recursively (see the EDAADM
-`machines` row in `nokia-eda/docs`). Hand-editing means counting slashes and balancing fences
-across six-plus levels — the "menace". This app turns that into a grid and regenerates the
-fences as pure codegen.
+- Front matter: title, description, icon, status, template, and hidden sidebars.
+- Markdown prose with inline helper buttons for bold, italic, links, code, highlights, keyboard
+  keys, and lists.
+- Zensical slash blocks and common classic Material syntax for admonitions and content tabs.
+- Details blocks, snippets, code blocks with Material options, images, button links, grid cards,
+  Markdown data tables, and recursive blocks-HTML tables.
+- Unknown/custom block syntax as raw markdown, so unsupported content is preserved instead of
+  silently changed.
 
 ## How it works
 
-- `src/blocks.ts` — the deterministic core. `parseDocument()` turns markdown into prose
-  segments + a typed table tree; `serializeDocument()` regenerates the blocks-HTML with all
-  slash depths recomputed. The round-trip is **structurally lossless** — it normalises
-  whitespace and drops decorative HTML comments (both desirable once a GUI replaces hand
-  editing). It is the one load-bearing piece and is intentionally not an LLM: a save must be
-  deterministic and reversible.
-- `src/TableEditor.tsx` — a **recursive** editable grid. A cell renders an ordered list of
-  markdown text runs and/or nested tables, so tables-inside-cells just work (the thing
-  Excel-style editors can't do). Add/delete rows and columns, set header alignment, insert a
-  nested table in any cell.
-- `src/RichMarkdown.tsx` — renders the other `pymdownx.blocks.*` constructs so the preview
-  matches the published page: `/// tab |` → a MUI tab switcher (consecutive tabs grouped),
-  admonitions (`/// note|tip|warning|danger|…`) → coloured callouts, `/// details |` →
-  collapsible accordion, and `--8<-- "path"` snippet includes → an include chip.
-- `src/App.tsx` — paste-to-import, click-to-edit cells, hover-pencil edit for prose, a
-  toggleable live markdown-source pane, and copy/download `.md`.
-- `src/markdown.ts` — `marked` for display-only rendering of prose and cell bodies.
+- `src/blocks.ts` is the deterministic core. `parseDocument()` turns markdown into a typed block
+  list; `serializeDocument()` regenerates markdown. The parser preserves code fences and keeps
+  unknown blocks raw.
+- `src/BlockEditor.tsx` provides the structured visual editor, block actions, shared Markdown
+  mini-editor, front matter form, tabs/cards editors, code controls, and normal Markdown table
+  editor.
+- `src/TableEditor.tsx` remains the recursive nested table editor for `/// html | table`.
+- `src/RichMarkdown.tsx` and `src/markdown.ts` provide display rendering for prose and block
+  previews.
+- `src/App.tsx` handles paste/import, the Insert menu, source-pane editing, copy, and download.
 
-## Scope / limitations
+## Syntax defaults
 
-- Tables (`/// html | table`) are structurally modelled and editable cell-by-cell, nesting
-  and all. Other block types (tabs, admonitions, details, snippets) are **rendered** for the
-  preview but edited as raw markdown (hover the pencil) — they round-trip verbatim.
-- A table nested inside a non-table block isn't promoted to the grid editor.
-- HTML comments inside tables are dropped on round-trip; output slash counts and whitespace
-  are normalised (re-renders identically in MkDocs).
+New inserted blocks default to Zensical / PyMdown slash-fence syntax, for example:
+
+```
+/// note | Heads up
+Write the callout content here.
+///
+```
+
+Imported classic Material admonitions and tabs such as `!!! note` and `=== "Linux"` are parsed
+and serialized in their original style where practical.
 
 ## Develop
 
@@ -64,11 +52,11 @@ pnpm install
 pnpm dev        # http://localhost:5174
 pnpm build      # tsc -b && vite build
 pnpm lint       # oxlint
-pnpm check      # parser/serializer round-trip check against the EDAADM sample
+pnpm check      # parser/serializer round-trip fixtures
 ```
 
-Click **Load EDAADM sample** in the empty state to load the real nested table excerpt.
+Click **Load EDAADM sample** in the empty state to load the real nested table excerpt, or
+**Start blank** to build a new page from the Insert menu.
 
 Like `cable-map`, this is a relative-base SPA, so it can later be packaged behind the EDA HTTP
-proxy if it should ship as an in-cluster app — but it is fully client-side and needs no
-backend.
+proxy if it should ship as an in-cluster app. It is fully client-side and needs no backend.

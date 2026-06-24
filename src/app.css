@@ -103,6 +103,137 @@
 }
 .seg:hover .seg-edit-btn { opacity: 1; }
 
+/* --- structured block editor --- */
+.block-card {
+  margin: 14px 0;
+  border-radius: 8px !important;
+  overflow: hidden;
+  background: var(--panel) !important;
+}
+.block-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 42px;
+  padding: 6px 8px 6px 12px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--muted) 5%, var(--panel));
+}
+.block-title {
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.block-detail {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.block-body { padding: 12px; }
+.block-divider { border-color: transparent !important; }
+.empty-doc {
+  display: grid;
+  place-items: center;
+  min-height: 220px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--muted) 5%, transparent);
+}
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+  align-items: center;
+}
+.inline-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.hint-line {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.render-preview {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--muted) 5%, transparent);
+}
+.mini-editor { margin-top: 10px; }
+.mini-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 32px;
+  margin-bottom: 4px;
+}
+.mini-label {
+  flex-grow: 1;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.mini-md,
+.code-edit,
+.raw-edit {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--fg);
+  padding: 10px 12px;
+}
+.mini-md {
+  min-height: 120px;
+  font: inherit;
+  line-height: 1.5;
+}
+.code-edit,
+.raw-edit {
+  min-height: 180px;
+  font-family: "Roboto Mono", ui-monospace, monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.admonition-preview {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+.admonition-preview-title {
+  margin-bottom: 6px;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+.image-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--muted) 5%, transparent);
+}
+.force-visible { opacity: 1 !important; }
+.md-table-card { margin-bottom: 0; }
+
 /* --- the table editor (MUI Paper card) --- */
 .tbl-card { margin: 14px 0; border-radius: 10px !important; overflow: hidden; background: var(--panel) !important; }
 .tbl-bar {
