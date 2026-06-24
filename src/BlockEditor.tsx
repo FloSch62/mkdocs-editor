@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import {
   Box,
   Button,
@@ -21,43 +21,45 @@ import AddIcon from '@mui/icons-material/Add'
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward'
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward'
 import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined'
+import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import CodeIcon from '@mui/icons-material/Code'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlineOutlined'
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
 import FormatAlignCenterIcon from '@mui/icons-material/FormatAlignCenter'
 import FormatAlignLeftIcon from '@mui/icons-material/FormatAlignLeft'
 import FormatAlignRightIcon from '@mui/icons-material/FormatAlignRight'
-import FormatBoldIcon from '@mui/icons-material/FormatBold'
-import FormatItalicIcon from '@mui/icons-material/FormatItalic'
 import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted'
 import GridViewOutlinedIcon from '@mui/icons-material/GridViewOutlined'
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined'
-import InsertLinkIcon from '@mui/icons-material/InsertLink'
-import KeyboardIcon from '@mui/icons-material/Keyboard'
 import LinkIcon from '@mui/icons-material/Link'
 import NotesOutlinedIcon from '@mui/icons-material/NotesOutlined'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import RawOnIcon from '@mui/icons-material/RawOn'
+import RemoveIcon from '@mui/icons-material/Remove'
 import SplitscreenOutlinedIcon from '@mui/icons-material/SplitscreenOutlined'
 import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined'
 import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined'
 import type { SvgIconComponent } from '@mui/icons-material'
 import {
   ADMONITION_KINDS,
+  type AdmonitionCollapse,
   type Align,
   type DocBlock,
   type FrontMatterData,
   type GridCard,
   type MarkdownTable,
+  type SyntaxStyle,
   type TabItem,
   newMarkdownTable,
   serializeDocument,
 } from './blocks.ts'
 import RichMarkdown from './RichMarkdown.tsx'
 import { ADMONITION } from './admonitions.ts'
+import { MarkdownFormatBar, RichCell, useMarkdownFormat } from './MarkdownField.tsx'
 import TableEditor from './TableEditor.tsx'
 
 const clone = <T,>(v: T): T => structuredClone(v)
@@ -198,24 +200,7 @@ function MarkdownMiniEditor({
   label?: string
   minRows?: number
 }) {
-  const ref = useRef<HTMLTextAreaElement | null>(null)
-
-  const replaceSelection = (before: string, after = before, fallback = 'text') => {
-    const el = ref.current
-    if (!el) {
-      onChange(`${value}${before}${fallback}${after}`)
-      return
-    }
-    const start = el.selectionStart
-    const end = el.selectionEnd
-    const selected = value.slice(start, end) || fallback
-    const next = `${value.slice(0, start)}${before}${selected}${after}${value.slice(end)}`
-    onChange(next)
-    requestAnimationFrame(() => {
-      el.focus()
-      el.setSelectionRange(start + before.length, start + before.length + selected.length)
-    })
-  }
+  const { ref, apply, onKeyDown } = useMarkdownFormat<HTMLTextAreaElement>(value, onChange)
 
   const insertLine = (prefix: string, sample: string) => {
     const el = ref.current
@@ -231,41 +216,13 @@ function MarkdownMiniEditor({
     <Box className="mini-editor">
       <Box className="mini-toolbar">
         <Box className="mini-label">{label}</Box>
-        <Tooltip title="Bold">
-          <IconButton size="small" onClick={() => replaceSelection('**')}>
-            <FormatBoldIcon sx={{ fontSize: 16 }} />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Italic">
-          <IconButton size="small" onClick={() => replaceSelection('_')}>
-            <FormatItalicIcon sx={{ fontSize: 16 }} />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Inline code">
-          <IconButton size="small" onClick={() => replaceSelection('`')}>
-            <CodeIcon sx={{ fontSize: 16 }} />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Link">
-          <IconButton size="small" onClick={() => replaceSelection('[', '](https://example.com)', 'label')}>
-            <InsertLinkIcon sx={{ fontSize: 16 }} />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Highlight">
-          <IconButton size="small" onClick={() => replaceSelection('==')}>
-            <RawOnIcon sx={{ fontSize: 16 }} />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Keyboard key">
-          <IconButton size="small" onClick={() => replaceSelection('++', '++', 'ctrl+c')}>
-            <KeyboardIcon sx={{ fontSize: 16 }} />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Bullet list">
-          <IconButton size="small" onClick={() => insertLine('- ', 'List item')}>
-            <FormatListBulletedIcon sx={{ fontSize: 16 }} />
-          </IconButton>
-        </Tooltip>
+        <MarkdownFormatBar apply={apply}>
+          <Tooltip title="Bullet list">
+            <IconButton size="small" onMouseDown={(e) => e.preventDefault()} onClick={() => insertLine('- ', 'List item')}>
+              <FormatListBulletedIcon sx={{ fontSize: 16 }} />
+            </IconButton>
+          </Tooltip>
+        </MarkdownFormatBar>
       </Box>
       <textarea
         ref={ref}
@@ -273,6 +230,7 @@ function MarkdownMiniEditor({
         rows={minRows}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onKeyDown={onKeyDown}
         spellCheck={false}
       />
     </Box>
@@ -294,6 +252,57 @@ function AdmonitionOption({ kind }: { kind: string }) {
     </Box>
   )
 }
+
+// A self-explaining dropdown row: an icon or a literal-syntax chip, the option name, and
+// (in the open menu) a one-line description of what it does. The closed Select passes no
+// `desc`, so the current choice still reads as a compact icon/chip + name.
+function ChoiceRow({ Icon, chip, label, desc }: { Icon?: SvgIconComponent; chip?: string; label: string; desc?: string }) {
+  return (
+    <Box className="choice-row">
+      {Icon && <Icon className="choice-ico" sx={{ fontSize: 18 }} />}
+      {chip && <code className="choice-chip">{chip}</code>}
+      <Box className="choice-text">
+        <span className="choice-label">{label}</span>
+        {desc && <span className="choice-desc">{desc}</span>}
+      </Box>
+    </Box>
+  )
+}
+
+// Syntax picker shared by admonitions and tab sets. Each option previews the literal opener
+// it emits (/// vs !!! / ===) so the choice is concrete rather than jargon.
+function SyntaxSelect({
+  value,
+  zensicalChip,
+  classicChip,
+  classicDesc,
+  onChange,
+}: {
+  value: SyntaxStyle
+  zensicalChip: string
+  classicChip: string
+  classicDesc: string
+  onChange: (v: SyntaxStyle) => void
+}) {
+  const row = (v: SyntaxStyle, withDesc: boolean) =>
+    v === 'zensical'
+      ? <ChoiceRow chip={zensicalChip} label="Zensical" desc={withDesc ? 'PyMdown slash block' : undefined} />
+      : <ChoiceRow chip={classicChip} label="Classic" desc={withDesc ? classicDesc : undefined} />
+  return (
+    <Select size="small" value={value} onChange={(e) => onChange(e.target.value as SyntaxStyle)} renderValue={(v) => row(v, false)}>
+      <MenuItem value="zensical">{row('zensical', true)}</MenuItem>
+      <MenuItem value="classic">{row('classic', true)}</MenuItem>
+    </Select>
+  )
+}
+
+// Collapse picker — each option shows the fold control the reader gets: no toggle when
+// static, a chevron that points sideways when it starts closed and down when it starts open.
+const COLLAPSE_OPTIONS: Array<{ value: AdmonitionCollapse; Icon: SvgIconComponent; label: string; desc: string }> = [
+  { value: 'none', Icon: RemoveIcon, label: 'Static', desc: 'Always expanded — no toggle' },
+  { value: 'closed', Icon: ChevronRightIcon, label: 'Fold closed', desc: 'Collapsible, starts closed' },
+  { value: 'open', Icon: ExpandMoreIcon, label: 'Fold open', desc: 'Collapsible, starts open' },
+]
 
 // Serialize a block for preview, coercing slash-block syntax so RichMarkdown can render it
 // (it understands `///` blocks, not the classic `!!!` / `===` forms).
@@ -405,11 +414,10 @@ function MarkdownTableEditor({ table, onChange }: { table: MarkdownTable; onChan
               {Array.from({ length: cols }, (_, c) => (
                 <th key={c}>
                   <Box className="cell">
-                    <TextField
-                      fullWidth
-                      size="small"
+                    <RichCell
+                      multiline={false}
                       value={table.headers[c] ?? ''}
-                      onChange={(e) => mutate((t) => { t.headers[c] = e.target.value })}
+                      onChange={(v) => mutate((t) => { t.headers[c] = v })}
                     />
                     <Box className="cell-foot force-visible">
                       <ToggleButtonGroup
@@ -418,9 +426,9 @@ function MarkdownTableEditor({ table, onChange }: { table: MarkdownTable; onChan
                         value={table.aligns[c] ?? 'left'}
                         onChange={(_alignEvent, v: Align | null) => v && mutate((t) => { t.aligns[c] = v })}
                       >
-                        <ToggleButton value="left"><FormatAlignLeftIcon sx={{ fontSize: 15 }} /></ToggleButton>
-                        <ToggleButton value="center"><FormatAlignCenterIcon sx={{ fontSize: 15 }} /></ToggleButton>
-                        <ToggleButton value="right"><FormatAlignRightIcon sx={{ fontSize: 15 }} /></ToggleButton>
+                        <Tooltip title="Align left"><ToggleButton value="left"><FormatAlignLeftIcon sx={{ fontSize: 15 }} /></ToggleButton></Tooltip>
+                        <Tooltip title="Align center"><ToggleButton value="center"><FormatAlignCenterIcon sx={{ fontSize: 15 }} /></ToggleButton></Tooltip>
+                        <Tooltip title="Align right"><ToggleButton value="right"><FormatAlignRightIcon sx={{ fontSize: 15 }} /></ToggleButton></Tooltip>
                       </ToggleButtonGroup>
                       {cols > 1 && (
                         <Tooltip title="Delete column">
@@ -448,13 +456,7 @@ function MarkdownTableEditor({ table, onChange }: { table: MarkdownTable; onChan
                 {Array.from({ length: cols }, (_, c) => (
                   <td key={c}>
                     <Box className="cell">
-                      <TextField
-                        fullWidth
-                        multiline
-                        size="small"
-                        value={row[c] ?? ''}
-                        onChange={(e) => setCell(r, c, e.target.value)}
-                      />
+                      <RichCell value={row[c] ?? ''} onChange={(v) => setCell(r, c, v)} />
                     </Box>
                   </td>
                 ))}
@@ -489,10 +491,13 @@ function TabsEditor({ block, onChange }: { block: Extract<DocBlock, { type: 'tab
   return (
     <>
       <Box className="inline-row">
-        <Select size="small" value={block.syntax} onChange={(e) => onChange({ ...block, syntax: e.target.value as 'zensical' | 'classic' })}>
-          <MenuItem value="zensical">Zensical slash blocks</MenuItem>
-          <MenuItem value="classic">Classic Material tabs</MenuItem>
-        </Select>
+        <SyntaxSelect
+          value={block.syntax}
+          zensicalChip="/// tab"
+          classicChip={'=== "Tab"'}
+          classicDesc="Material content tabs"
+          onChange={(syntax) => onChange({ ...block, syntax })}
+        />
         <Button size="small" startIcon={<AddIcon />} onClick={add}>Tab</Button>
         <Button size="small" startIcon={<DeleteOutlineIcon />} onClick={remove}>Delete tab</Button>
       </Box>
@@ -567,14 +572,25 @@ function blockEditorBody(block: DocBlock, onChange: (b: DocBlock) => void): Reac
               ))}
             </Select>
             <TextField size="small" label="Title" value={block.title} onChange={(e) => onChange({ ...block, title: e.target.value })} />
-            <Select size="small" value={block.syntax} onChange={(e) => onChange({ ...block, syntax: e.target.value as 'zensical' | 'classic' })}>
-              <MenuItem value="zensical">Zensical slash block</MenuItem>
-              <MenuItem value="classic">Classic Material</MenuItem>
-            </Select>
-            <Select size="small" value={block.collapse} onChange={(e) => onChange({ ...block, collapse: e.target.value as typeof block.collapse })}>
-              <MenuItem value="none">Static</MenuItem>
-              <MenuItem value="closed">Collapsible closed</MenuItem>
-              <MenuItem value="open">Collapsible open</MenuItem>
+            <SyntaxSelect
+              value={block.syntax}
+              zensicalChip={`/// ${block.kind}`}
+              classicChip={`!!! ${block.kind}`}
+              classicDesc="Material admonition"
+              onChange={(syntax) => onChange({ ...block, syntax })}
+            />
+            <Select
+              size="small"
+              value={block.collapse}
+              onChange={(e) => onChange({ ...block, collapse: e.target.value as typeof block.collapse })}
+              renderValue={(v) => {
+                const o = COLLAPSE_OPTIONS.find((c) => c.value === v) ?? COLLAPSE_OPTIONS[0]
+                return <ChoiceRow Icon={o.Icon} label={o.label} />
+              }}
+            >
+              {COLLAPSE_OPTIONS.map((o) => (
+                <MenuItem key={o.value} value={o.value}><ChoiceRow Icon={o.Icon} label={o.label} desc={o.desc} /></MenuItem>
+              ))}
             </Select>
           </FieldGrid>
           <MarkdownMiniEditor label="Admonition content" value={block.body} onChange={(body) => onChange({ ...block, body })} />

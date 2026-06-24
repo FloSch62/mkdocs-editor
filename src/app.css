@@ -575,6 +575,31 @@
   font-size: 12px;
 }
 
+/* Insert menu — every block choice shows its icon and a one-line description of what it is */
+.zx-insert-item { align-items: flex-start; gap: 10px; padding: 7px 14px; }
+.zx-insert-ico { font-size: 19px; color: var(--accent); margin-top: 1px; flex-shrink: 0; }
+.zx-insert-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+.zx-insert-label { font-size: 13.5px; font-weight: 600; }
+.zx-insert-desc { font-size: 11.5px; color: var(--muted); white-space: normal; }
+
+/* Self-explaining dropdown rows (syntax / collapse selects): icon or literal-syntax chip,
+   the option name, and a muted description so the menu reads without prior knowledge. */
+.choice-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.choice-ico { color: var(--accent); flex-shrink: 0; }
+.choice-chip {
+  flex-shrink: 0;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--md-code-bg-color);
+  color: var(--md-code-fg-color);
+  border: 1px solid var(--line);
+}
+.choice-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.choice-label { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.choice-desc { font-size: 11px; color: var(--muted); white-space: normal; }
+
 /* markdown block: rendered prose is primary; the source editor reveals on demand */
 .render-preview { padding: 2px 0; }
 .zx-prose-block { position: relative; border-radius: 6px; cursor: text; transition: background 0.12s; }
@@ -733,6 +758,24 @@
 .cell-rendered.empty::before { content: 'empty'; color: var(--muted); font-style: italic; opacity: .7; }
 .cell-foot { display: flex; align-items: center; gap: 2px; margin-top: 4px; flex-wrap: wrap; opacity: 0; transition: opacity .12s; }
 .cell:hover .cell-foot { opacity: 1; }
+
+/* table cells get the same markdown formatting controls — revealed while the cell is focused */
+.rich-cell { display: flex; flex-direction: column; }
+.rich-cell-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1px;
+  margin-top: 4px;
+  padding: 2px;
+  width: max-content;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+}
+.rich-cell-bar .MuiIconButton-root { padding: 3px; }
 
 /* ======================================================================
    Source textarea

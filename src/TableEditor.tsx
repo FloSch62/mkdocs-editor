@@ -4,7 +4,6 @@ import {
   Button,
   IconButton,
   Paper,
-  TextField,
   ToggleButton,
   ToggleButtonGroup,
   Tooltip,
@@ -20,6 +19,7 @@ import FormatAlignCenterIcon from '@mui/icons-material/FormatAlignCenter'
 import FormatAlignRightIcon from '@mui/icons-material/FormatAlignRight'
 import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined'
 import { renderMarkdown } from './markdown.ts'
+import { RichCell } from './MarkdownField.tsx'
 import { type Cell, type Table, columnCount, emptyCell, newTable } from './blocks.ts'
 
 const clone = <T,>(v: T): T => structuredClone(v)
@@ -77,14 +77,11 @@ function CellView({ cell, onChange }: { cell: Cell; onChange: (c: Cell) => void 
       {cell.blocks.map((b, i) =>
         b.type === 'text' ? (
           edit?.idx === i ? (
-            <TextField
+            <RichCell
               key={i}
-              multiline
-              fullWidth
-              size="small"
               autoFocus
               value={edit.value}
-              onChange={(e) => setEdit({ idx: i, value: e.target.value })}
+              onChange={(v) => setEdit({ idx: i, value: v })}
               onBlur={commit}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) commit()
@@ -146,9 +143,9 @@ function CellView({ cell, onChange }: { cell: Cell; onChange: (c: Cell) => void 
             onChange={(_, v) => v && onChange({ ...cell, attrs: withAlign(v) })}
             sx={{ ml: 0.5, '& .MuiToggleButton-root': { p: 0.25, border: 'none' } }}
           >
-            <ToggleButton value="left"><FormatAlignLeftIcon sx={{ fontSize: 15 }} /></ToggleButton>
-            <ToggleButton value="center"><FormatAlignCenterIcon sx={{ fontSize: 15 }} /></ToggleButton>
-            <ToggleButton value="right"><FormatAlignRightIcon sx={{ fontSize: 15 }} /></ToggleButton>
+            <Tooltip title="Align left"><ToggleButton value="left"><FormatAlignLeftIcon sx={{ fontSize: 15 }} /></ToggleButton></Tooltip>
+            <Tooltip title="Align center"><ToggleButton value="center"><FormatAlignCenterIcon sx={{ fontSize: 15 }} /></ToggleButton></Tooltip>
+            <Tooltip title="Align right"><ToggleButton value="right"><FormatAlignRightIcon sx={{ fontSize: 15 }} /></ToggleButton></Tooltip>
           </ToggleButtonGroup>
         )}
       </Box>
