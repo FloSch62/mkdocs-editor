@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import {
   Box,
   Button,
@@ -32,13 +32,9 @@ import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
 import FormatAlignCenterIcon from '@mui/icons-material/FormatAlignCenter'
 import FormatAlignLeftIcon from '@mui/icons-material/FormatAlignLeft'
 import FormatAlignRightIcon from '@mui/icons-material/FormatAlignRight'
-import FormatBoldIcon from '@mui/icons-material/FormatBold'
-import FormatItalicIcon from '@mui/icons-material/FormatItalic'
 import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted'
 import GridViewOutlinedIcon from '@mui/icons-material/GridViewOutlined'
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined'
-import InsertLinkIcon from '@mui/icons-material/InsertLink'
-import KeyboardIcon from '@mui/icons-material/Keyboard'
 import LinkIcon from '@mui/icons-material/Link'
 import NotesOutlinedIcon from '@mui/icons-material/NotesOutlined'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
@@ -63,6 +59,7 @@ import {
 } from './blocks.ts'
 import RichMarkdown from './RichMarkdown.tsx'
 import { ADMONITION } from './admonitions.ts'
+import { MarkdownFormatBar, RichCell, useMarkdownFormat } from './MarkdownField.tsx'
 import TableEditor from './TableEditor.tsx'
 
 const clone = <T,>(v: T): T => structuredClone(v)
@@ -203,24 +200,7 @@ function MarkdownMiniEditor({
   label?: string
   minRows?: number
 }) {
-  const ref = useRef<HTMLTextAreaElement | null>(null)
-
-  const replaceSelection = (before: string, after = before, fallback = 'text') => {
-    const el = ref.current
-    if (!el) {
-      onChange(`${value}${before}${fallback}${after}`)
-      return
-    }
-    const start = el.selectionStart
-    const end = el.selectionEnd
-    const selected = value.slice(start, end) || fallback
-    const next = `${value.slice(0, start)}${before}${selected}${after}${value.slice(end)}`
-    onChange(next)
-    requestAnimationFrame(() => {
-      el.focus()
-      el.setSelectionRange(start + before.length, start + before.length + selected.length)
-    })
-  }
+  const { ref, apply, onKeyDown } = useMarkdownFormat<HTMLTextAreaElement>(value, onChange)
 
   const insertLine = (prefix: string, sample: string) => {
     const el = ref.current
@@ -236,41 +216,13 @@ function MarkdownMiniEditor({
     <Box className="mini-editor">
       <Box className="mini-toolbar">
         <Box className="mini-label">{label}</Box>
-        <Tooltip title="Bold">
-          <IconButton size="small" onClick={() => replaceSelection('**')}>
-            <FormatBoldIcon sx={{ fontSize: 16 }} />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Italic">
-          <IconButton size="small" onClick={() => replaceSelection('_')}>
-            <FormatItalicIcon sx={{ fontSize: 16 }} />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Inline code">
-          <IconButton size="small" onClick={() => replaceSelection('`')}>
-            <CodeIcon sx={{ fontSize: 16 }} />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Link">
-          <IconButton size="small" onClick={() => replaceSelection('[', '](https://example.com)', 'label')}>
-            <InsertLinkIcon sx={{ fontSize: 16 }} />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Highlight">
-          <IconButton size="small" onClick={() => replaceSelection('==')}>
-            <RawOnIcon sx={{ fontSize: 16 }} />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Keyboard key">
-          <IconButton size="small" onClick={() => replaceSelection('++', '++', 'ctrl+c')}>
-            <KeyboardIcon sx={{ fontSize: 16 }} />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Bullet list">
-          <IconButton size="small" onClick={() => insertLine('- ', 'List item')}>
-            <FormatListBulletedIcon sx={{ fontSize: 16 }} />
-          </IconButton>
-        </Tooltip>
+        <MarkdownFormatBar apply={apply}>
+          <Tooltip title="Bullet list">
+            <IconButton size="small" onMouseDown={(e) => e.preventDefault()} onClick={() => insertLine('- ', 'List item')}>
+              <FormatListBulletedIcon sx={{ fontSize: 16 }} />
+            </IconButton>
+          </Tooltip>
+        </MarkdownFormatBar>
       </Box>
       <textarea
         ref={ref}
@@ -278,6 +230,7 @@ function MarkdownMiniEditor({
         rows={minRows}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onKeyDown={onKeyDown}
         spellCheck={false}
       />
     </Box>
@@ -461,11 +414,10 @@ function MarkdownTableEditor({ table, onChange }: { table: MarkdownTable; onChan
               {Array.from({ length: cols }, (_, c) => (
                 <th key={c}>
                   <Box className="cell">
-                    <TextField
-                      fullWidth
-                      size="small"
+                    <RichCell
+                      multiline={false}
                       value={table.headers[c] ?? ''}
-                      onChange={(e) => mutate((t) => { t.headers[c] = e.target.value })}
+                      onChange={(v) => mutate((t) => { t.headers[c] = v })}
                     />
                     <Box className="cell-foot force-visible">
                       <ToggleButtonGroup
@@ -504,13 +456,7 @@ function MarkdownTableEditor({ table, onChange }: { table: MarkdownTable; onChan
                 {Array.from({ length: cols }, (_, c) => (
                   <td key={c}>
                     <Box className="cell">
-                      <TextField
-                        fullWidth
-                        multiline
-                        size="small"
-                        value={row[c] ?? ''}
-                        onChange={(e) => setCell(r, c, e.target.value)}
-                      />
+                      <RichCell value={row[c] ?? ''} onChange={(v) => setCell(r, c, v)} />
                     </Box>
                   </td>
                 ))}

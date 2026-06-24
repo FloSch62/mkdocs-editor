@@ -759,6 +759,24 @@
 .cell-foot { display: flex; align-items: center; gap: 2px; margin-top: 4px; flex-wrap: wrap; opacity: 0; transition: opacity .12s; }
 .cell:hover .cell-foot { opacity: 1; }
 
+/* table cells get the same markdown formatting controls — revealed while the cell is focused */
+.rich-cell { display: flex; flex-direction: column; }
+.rich-cell-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1px;
+  margin-top: 4px;
+  padding: 2px;
+  width: max-content;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+}
+.rich-cell-bar .MuiIconButton-root { padding: 3px; }
+
 /* ======================================================================
    Source textarea
    ====================================================================== */
