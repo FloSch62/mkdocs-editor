@@ -84,6 +84,14 @@ export function initialWorkspace(): WorkspaceState {
   return { meta: null, files: new Map(), activePath: null, mode: 'empty', repoCss: null }
 }
 
+export function workspaceRepoKey(meta: RepoMeta): string {
+  return [meta.owner, meta.repo, meta.branch, meta.subPath].join('\0')
+}
+
+function matchesRepo(state: WorkspaceState, repoKey: string): boolean {
+  return Boolean(state.meta && workspaceRepoKey(state.meta) === repoKey)
+}
+
 // --- workspace reducer ---
 export type WorkspaceAction =
   // empty/single-document entry points
@@ -92,9 +100,9 @@ export type WorkspaceAction =
   // repo loading
   | { type: 'loadRepo'; meta: RepoMeta; files: WorkspaceFile[]; css: string | null }
   | { type: 'setActive'; path: string }
-  | { type: 'fileLoading'; path: string }
-  | { type: 'fileLoaded'; path: string; markdown: string }
-  | { type: 'fileError'; path: string; error: string }
+  | { type: 'fileLoading'; path: string; repoKey: string }
+  | { type: 'fileLoaded'; path: string; repoKey: string; markdown: string }
+  | { type: 'fileError'; path: string; repoKey: string; error: string }
   // active-file editing (forwarded to that file's history)
   | { type: 'commit'; path: string; updater: BlocksUpdater }
   | { type: 'undo'; path: string }
@@ -167,6 +175,7 @@ export function workspaceReducer(
       return { ...state, activePath: action.path }
 
     case 'fileLoading':
+      if (!matchesRepo(state, action.repoKey)) return state
       return withFile(state, action.path, (file) =>
         file.state === 'loaded' || file.state === 'loading'
           ? file
@@ -174,6 +183,7 @@ export function workspaceReducer(
       )
 
     case 'fileLoaded': {
+      if (!matchesRepo(state, action.repoKey)) return state
       const blocks = parseDocument(action.markdown)
       return withFile(state, action.path, (file) => ({
         ...file,
@@ -186,6 +196,7 @@ export function workspaceReducer(
     }
 
     case 'fileError':
+      if (!matchesRepo(state, action.repoKey)) return state
       return withFile(state, action.path, (file) => ({
         ...file,
         state: 'error',

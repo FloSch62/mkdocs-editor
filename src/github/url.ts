@@ -53,7 +53,10 @@ export function parseGitHubUrl(input: string): GitHubTarget | null {
     const [branch, ...pathParts] = rest
     let subPath = pathParts.join('/')
     // A /blob/ link points at a file; scope to its parent directory.
-    if (kind === 'blob' && subPath) subPath = subPath.replace(/\/[^/]*$/, '')
+    if (kind === 'blob' && subPath) {
+      const lastSlash = subPath.lastIndexOf('/')
+      subPath = lastSlash === -1 ? '' : subPath.slice(0, lastSlash)
+    }
     return { owner, repo, branch, subPath }
   }
 

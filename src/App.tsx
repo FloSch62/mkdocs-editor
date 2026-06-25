@@ -50,7 +50,7 @@ import ZensicalLogo from './ZensicalLogo.tsx'
 import FileTree from './components/FileTree.tsx'
 import LoadFromGitHub from './components/LoadFromGitHub.tsx'
 import { SAMPLE } from './sample.ts'
-import { initialWorkspace, workspaceReducer } from './workspace/reducer.ts'
+import { initialWorkspace, workspaceReducer, workspaceRepoKey } from './workspace/reducer.ts'
 import type { LoadResult } from './github/api.ts'
 import { fetchRawFile } from './github/api.ts'
 import { exportZip } from './workspace/zip.ts'
@@ -305,22 +305,24 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
   }
 
   // Lazily fetch a file's content the first time it is opened (raw host, not rate
-  // limited). The in-flight ref dedupes concurrent fetches (incl. React StrictMode's
-  // double-invoke) without a cleanup that would cancel the very fetch this run starts —
-  // dispatching fileLoading changes activeFile and re-triggers this effect, so a
-  // cleanup-based guard would abort the request before it ever resolves.
+  // limited). The in-flight ref dedupes concurrent fetches per repo+path (incl. React
+  // StrictMode's double-invoke) without a cleanup that would cancel the very fetch this
+  // run starts — dispatching fileLoading changes activeFile and re-triggers this effect,
+  // so a cleanup-based guard would abort the request before it ever resolves.
   const inFlight = useRef<Set<string>>(new Set())
   useEffect(() => {
     if (!ws.meta || !activeFile || activeFile.state !== 'unloaded') return
     const path = activeFile.path
-    if (inFlight.current.has(path)) return
+    const repoKey = workspaceRepoKey(ws.meta)
+    const requestKey = `${repoKey}\0${path}`
+    if (inFlight.current.has(requestKey)) return
     const { owner, repo, branch } = ws.meta
-    inFlight.current.add(path)
-    dispatch({ type: 'fileLoading', path })
+    inFlight.current.add(requestKey)
+    dispatch({ type: 'fileLoading', path, repoKey })
     fetchRawFile(owner, repo, branch, path)
-      .then((markdownText) => dispatch({ type: 'fileLoaded', path, markdown: markdownText }))
-      .catch((err) => dispatch({ type: 'fileError', path, error: (err as Error).message }))
-      .finally(() => inFlight.current.delete(path))
+      .then((markdownText) => dispatch({ type: 'fileLoaded', path, repoKey, markdown: markdownText }))
+      .catch((err) => dispatch({ type: 'fileError', path, repoKey, error: (err as Error).message }))
+      .finally(() => inFlight.current.delete(requestKey))
   }, [ws.meta, activeFile])
 
   useEffect(() => {
