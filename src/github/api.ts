@@ -125,9 +125,57 @@ export async function fetchRawFile(
 const isMarkdown = (path: string): boolean =>
   path.endsWith('.md') || path.endsWith('.markdown')
 
+// Pull `extra_css` (and `docs_dir`) out of mkdocs.yml with a tolerant line scan rather
+// than a real YAML parse — mkdocs configs use Python-specific `!!python/...` tags that
+// break standard YAML parsers.
+function parseExtraCss(yml: string): { docsDir: string; css: string[] } {
+  const lines = yml.replace(/\r\n?/g, '\n').split('\n')
+  let docsDir = 'docs'
+  const css: string[] = []
+  for (let i = 0; i < lines.length; i++) {
+    const dm = /^docs_dir:\s*(.+?)\s*$/.exec(lines[i])
+    if (dm) docsDir = dm[1].replace(/^["']|["']$/g, '').replace(/\/$/, '')
+    if (/^extra_css:\s*$/.test(lines[i])) {
+      for (let j = i + 1; j < lines.length; j++) {
+        if (lines[j].trim() === '' || /^\s*#/.test(lines[j])) continue
+        const im = /^\s*-\s*(.+?)\s*$/.exec(lines[j])
+        if (im) css.push(im[1].replace(/^["']|["']$/g, ''))
+        else break // dedented to the next top-level key
+      }
+    }
+  }
+  return { docsDir, css }
+}
+
+async function fetchMkdocsConfig(owner: string, repo: string, branch: string): Promise<string | null> {
+  const tryFetch = (name: string) => fetchRawFile(owner, repo, branch, name).catch(() => null)
+  // mkdocs.yml is by far the common spelling; fall back to mkdocs.yaml only if absent.
+  return (await tryFetch('mkdocs.yml')) ?? (await tryFetch('mkdocs.yaml'))
+}
+
+// Fetch and concatenate the repo's extra_css (best effort — returns null if absent).
+export async function fetchRepoStyles(
+  owner: string,
+  repo: string,
+  branch: string,
+): Promise<string | null> {
+  const yml = await fetchMkdocsConfig(owner, repo, branch)
+  if (!yml) return null
+  const { docsDir, css } = parseExtraCss(yml)
+  const local = css.filter((p) => !/^https?:\/\//i.test(p))
+  if (local.length === 0) return null
+  const texts = await Promise.all(
+    local.map((p) => fetchRawFile(owner, repo, branch, `${docsDir}/${p}`).catch(() => '')),
+  )
+  const combined = texts.filter(Boolean).join('\n\n')
+  return combined.trim() ? combined : null
+}
+
 export interface LoadResult {
   meta: RepoMeta
   files: WorkspaceFile[]
+  // Concatenated repo stylesheets (raw, unscoped) — null when the repo has none.
+  css: string | null
 }
 
 // Orchestrates a full load: parse the URL, resolve the branch if needed, fetch the
@@ -139,7 +187,11 @@ export async function loadRepoMarkdown(input: string, token?: string): Promise<L
   }
 
   const branch = target.branch ?? (await fetchDefaultBranch(target.owner, target.repo, token))
-  const { entries, truncated } = await fetchTree(target.owner, target.repo, branch, token)
+  // Fetch the file tree and the repo stylesheets in parallel (styles are best effort).
+  const [{ entries, truncated }, css] = await Promise.all([
+    fetchTree(target.owner, target.repo, branch, token),
+    fetchRepoStyles(target.owner, target.repo, branch).catch(() => null),
+  ])
 
   const subPath = target.subPath.replace(/\/$/, '')
   const prefix = subPath ? `${subPath}/` : ''
@@ -168,5 +220,6 @@ export async function loadRepoMarkdown(input: string, token?: string): Promise<L
   return {
     meta: { owner: target.owner, repo: target.repo, branch, subPath, truncated },
     files,
+    css,
   }
 }

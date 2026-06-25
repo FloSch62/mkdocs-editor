@@ -81,7 +81,7 @@ export function documentHistoryReducer(
 const emptyHistory = (): DocumentHistory => ({ past: [], present: null, future: [] })
 
 export function initialWorkspace(): WorkspaceState {
-  return { meta: null, files: new Map(), activePath: null, mode: 'empty' }
+  return { meta: null, files: new Map(), activePath: null, mode: 'empty', repoCss: null }
 }
 
 // --- workspace reducer ---
@@ -90,7 +90,7 @@ export type WorkspaceAction =
   | { type: 'reset' }
   | { type: 'openSingle'; blocks: DocBlock[] }
   // repo loading
-  | { type: 'loadRepo'; meta: RepoMeta; files: WorkspaceFile[] }
+  | { type: 'loadRepo'; meta: RepoMeta; files: WorkspaceFile[]; css: string | null }
   | { type: 'setActive'; path: string }
   | { type: 'fileLoading'; path: string }
   | { type: 'fileLoaded'; path: string; markdown: string }
@@ -152,13 +152,14 @@ export function workspaceReducer(
         files: new Map([[SINGLE_PATH, file]]),
         activePath: SINGLE_PATH,
         mode: 'single',
+        repoCss: null,
       }
     }
 
     case 'loadRepo': {
       const files = new Map<string, WorkspaceFile>()
       for (const f of action.files) files.set(f.path, f)
-      return { meta: action.meta, files, activePath: null, mode: 'repo' }
+      return { meta: action.meta, files, activePath: null, mode: 'repo', repoCss: action.css }
     }
 
     case 'setActive':

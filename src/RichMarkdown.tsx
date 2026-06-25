@@ -12,6 +12,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined'
 import { renderMarkdown } from './markdown.ts'
 import { ADMONITION } from './admonitions.ts'
+import { resolveHtmlAssets, useAssetResolver } from './preview/assets.ts'
 
 // ---- parse pymdownx blocks within a prose markdown fragment ----
 //
@@ -112,8 +113,10 @@ function parseUntil(lines: string[], start: number, marker: number, indent: stri
 }
 
 function Md({ text }: { text: string }) {
+  const resolve = useAssetResolver()
   if (!text.trim()) return null
-  return <div className="prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(text) }} />
+  const html = resolveHtmlAssets(renderMarkdown(text), resolve)
+  return <div className="prose" dangerouslySetInnerHTML={{ __html: html }} />
 }
 
 function Snippet({ path }: { path: string }) {

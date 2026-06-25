@@ -19,6 +19,7 @@ import CodeIcon from '@mui/icons-material/Code'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import DownloadIcon from '@mui/icons-material/Download'
 import FolderZipOutlinedIcon from '@mui/icons-material/FolderZipOutlined'
+import StyleOutlinedIcon from '@mui/icons-material/StyleOutlined'
 import RedoIcon from '@mui/icons-material/Redo'
 import UndoIcon from '@mui/icons-material/Undo'
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
@@ -53,6 +54,13 @@ import { initialWorkspace, workspaceReducer } from './workspace/reducer.ts'
 import type { LoadResult } from './github/api.ts'
 import { fetchRawFile } from './github/api.ts'
 import { exportZip } from './workspace/zip.ts'
+import {
+  AssetResolverContext,
+  identityResolver,
+  makeAssetResolver,
+  type AssetResolver,
+} from './preview/assets.ts'
+import { scopeCss } from './preview/css.ts'
 
 const clone = <T,>(v: T): T => structuredClone(v)
 
@@ -157,6 +165,7 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
   const [preview, setPreview] = useState(false)
   const [insertAnchor, setInsertAnchor] = useState<HTMLElement | null>(null)
   const [exportAnchor, setExportAnchor] = useState<HTMLElement | null>(null)
+  const [repoStyles, setRepoStyles] = useState(true)
 
   const mainRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
@@ -171,6 +180,25 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
   const canRedo = (activeFile?.history?.future.length ?? 0) > 0
 
   const markdown = useMemo(() => (blocks ? serializeDocument(blocks) : ''), [blocks])
+
+  // Resolve relative image paths in the preview against the active file's directory on
+  // raw.githubusercontent.com. Identity (no rewriting) in paste/single-doc mode.
+  const assetResolver = useMemo<AssetResolver>(
+    () => (ws.meta && activeFile ? makeAssetResolver(ws.meta, activeFile.path) : identityResolver),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only the path matters, not the file object identity
+    [ws.meta, activeFile?.path],
+  )
+
+  // The repo's extra_css adapted to style our rendered content (.prose) in both edit and
+  // preview, scoped so it never reaches the editor chrome. A synthetic rule wires our
+  // prose to the repo's body font (--md-text-font) the way Material's base does.
+  const repoStyleCss = useMemo(() => {
+    if (!ws.repoCss) return null
+    const bodyFont =
+      '.zx-repo-css .prose{font-family:var(--md-text-font),-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif}'
+    return `${bodyFont}\n${scopeCss(ws.repoCss, '.zx-repo-css')}`
+  }, [ws.repoCss])
+  const stylesActive = repoStyles && Boolean(repoStyleCss)
 
   const commitBlocks = useCallback((updater: BlocksUpdater) => {
     if (!activePath) return
@@ -259,7 +287,8 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
     setPreview(false)
     setShowSource(false)
     setInsertAnchor(null)
-    dispatch({ type: 'loadRepo', meta: res.meta, files: res.files })
+    setRepoStyles(true)
+    dispatch({ type: 'loadRepo', meta: res.meta, files: res.files, css: res.css })
   }
 
   const selectFile = (path: string) => {
@@ -354,6 +383,7 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
   const bodyClass = showSource ? 'with-source' : toc.length ? '' : 'no-toc'
 
   return (
+    <AssetResolverContext.Provider value={assetResolver}>
     <div className="app-shell">
       <AppBar className="zx-header" position="static" elevation={0}>
         <Toolbar variant="dense" sx={{ gap: 1 }}>
@@ -435,6 +465,17 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
           )}
           {ws.mode === 'repo' && (
             <>
+              {ws.repoCss && (
+                <Tooltip title={repoStyles ? "Repo styles on — using the site's stylesheets" : 'Repo styles off'}>
+                  <IconButton
+                    size="small"
+                    className={repoStyles ? 'zx-toggle-active' : ''}
+                    onClick={() => setRepoStyles((v) => !v)}
+                  >
+                    <StyleOutlinedIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
               <Button
                 size="small"
                 variant="outlined"
@@ -539,7 +580,14 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
           </nav>
 
           <main className="zx-main" ref={mainRef}>
-            <div className={`zx-content${showSource ? ' wide' : ''}${preview ? ' zx-preview' : ''}`} ref={contentRef}>
+            {stylesActive && <style>{repoStyleCss}</style>}
+            <div
+              className={`zx-content${showSource ? ' wide' : ''}${preview ? ' zx-preview' : ''}${stylesActive ? ' zx-repo-css' : ''}`}
+              data-md-color-scheme={stylesActive ? (mode === 'dark' ? 'slate' : 'default') : undefined}
+              data-md-color-primary={stylesActive ? 'indigo' : undefined}
+              data-md-color-accent={stylesActive ? 'indigo' : undefined}
+              ref={contentRef}
+            >
               {!blocks ? (
                 <Box className="empty-doc">
                   {activeFile?.state === 'loading' ? (
@@ -613,5 +661,6 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
         </div>
       )}
     </div>
+    </AssetResolverContext.Provider>
   )
 }

@@ -43,4 +43,6 @@ export interface WorkspaceState {
   files: Map<string, WorkspaceFile>
   activePath: string | null
   mode: WorkspaceMode
+  // Raw (unscoped) concatenated repo stylesheets, or null when the repo has none.
+  repoCss: string | null
 }
