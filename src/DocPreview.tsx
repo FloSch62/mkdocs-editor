@@ -14,7 +14,10 @@ import {
 
 function blockMarkdown(block: DocBlock): string {
   // coerce slash-block syntax / collapse so RichMarkdown can render it (it speaks `///`)
-  let b: DocBlock = 'syntax' in block ? { ...block, syntax: 'zensical' } : block
+  let b: DocBlock = block
+  if (block.type === 'admonition' || block.type === 'details' || block.type === 'tabset') {
+    b = { ...block, syntax: 'zensical' }
+  }
   if (b.type === 'admonition') b = { ...b, collapse: 'none' }
   return serializeDocument([b])
 }

@@ -38,7 +38,6 @@ import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined'
 import LinkIcon from '@mui/icons-material/Link'
 import NotesOutlinedIcon from '@mui/icons-material/NotesOutlined'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
-import RawOnIcon from '@mui/icons-material/RawOn'
 import RemoveIcon from '@mui/icons-material/Remove'
 import SplitscreenOutlinedIcon from '@mui/icons-material/SplitscreenOutlined'
 import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined'
@@ -54,7 +53,9 @@ import {
   type MarkdownTable,
   type SyntaxStyle,
   type TabItem,
+  newBlock,
   newMarkdownTable,
+  parseDocument,
   serializeDocument,
 } from './blocks.ts'
 import RichMarkdown from './RichMarkdown.tsx'
@@ -63,6 +64,7 @@ import { MarkdownFormatBar, RichCell, useMarkdownFormat } from './MarkdownField.
 import TableEditor from './TableEditor.tsx'
 
 const clone = <T,>(v: T): T => structuredClone(v)
+type BlockReplacement = DocBlock | DocBlock[]
 
 function firstLine(text: string): string {
   const line = text.trim().split('\n')[0] ?? ''
@@ -77,6 +79,8 @@ function blockTitle(block: DocBlock): { title: string; detail: string; Icon: Svg
       return { title: 'Front matter', detail: String(block.data.title ?? block.data.description ?? ''), Icon: ArticleOutlinedIcon }
     case 'htmlTable':
       return { title: 'Nested HTML table', detail: 'pymdownx.blocks.html', Icon: TableChartOutlinedIcon }
+    case 'htmlBlock':
+      return { title: 'HTML block', detail: block.spec, Icon: CodeIcon }
     case 'markdownTable':
       return { title: 'Data table', detail: `${block.table.headers.length} columns`, Icon: TableChartOutlinedIcon }
     case 'admonition':
@@ -96,7 +100,7 @@ function blockTitle(block: DocBlock): { title: string; detail: string; Icon: Svg
     case 'grid':
       return { title: 'Grid cards', detail: `${block.cards.length} cards`, Icon: GridViewOutlinedIcon }
     case 'raw':
-      return { title: 'Raw block', detail: block.label, Icon: RawOnIcon }
+      return { title: 'Raw block', detail: block.label, Icon: CodeIcon }
   }
 }
 
@@ -108,7 +112,6 @@ function BlockShell({
   previewable,
   editing,
   onToggleEdit,
-  onChange,
   onInsertAfter,
   onDuplicate,
   onDelete,
@@ -121,7 +124,6 @@ function BlockShell({
   previewable: boolean
   editing: boolean
   onToggleEdit: () => void
-  onChange: (b: DocBlock) => void
   onInsertAfter: () => void
   onDuplicate: () => void
   onDelete: () => void
@@ -138,19 +140,14 @@ function BlockShell({
           {detail && <Box className="block-detail">{detail}</Box>}
         </Box>
         {previewable && (
-          <Button
-            size="small"
-            className="block-edit-toggle"
-            startIcon={editing ? <VisibilityOutlinedIcon sx={{ fontSize: 16 }} /> : <EditOutlinedIcon sx={{ fontSize: 16 }} />}
-            onClick={onToggleEdit}
-          >
-            {editing ? 'Done' : 'Edit'}
-          </Button>
-        )}
-        {block.type !== 'raw' && (
-          <Tooltip title="Convert this block to raw Markdown">
-            <IconButton size="small" onClick={() => onChange({ type: 'raw', label: title.toLowerCase(), text: serializeDocument([block]) })}>
-              <RawOnIcon sx={{ fontSize: 17 }} />
+          <Tooltip title={editing ? 'Done editing' : 'Edit block'}>
+            <IconButton
+              size="small"
+              className="block-edit-toggle"
+              aria-label={editing ? 'Done editing' : 'Edit block'}
+              onClick={onToggleEdit}
+            >
+              {editing ? <VisibilityOutlinedIcon sx={{ fontSize: 17 }} /> : <EditOutlinedIcon sx={{ fontSize: 17 }} />}
             </IconButton>
           </Tooltip>
         )}
@@ -307,7 +304,10 @@ const COLLAPSE_OPTIONS: Array<{ value: AdmonitionCollapse; Icon: SvgIconComponen
 // Serialize a block for preview, coercing slash-block syntax so RichMarkdown can render it
 // (it understands `///` blocks, not the classic `!!!` / `===` forms).
 function previewMarkdown(block: DocBlock): string {
-  let b: DocBlock = 'syntax' in block ? { ...block, syntax: 'zensical' } : block
+  let b: DocBlock = block
+  if (block.type === 'admonition' || block.type === 'details' || block.type === 'tabset') {
+    b = { ...block, syntax: 'zensical' }
+  }
   // a collapsible admonition serializes to classic `???` syntax, which RichMarkdown can't
   // render — show it as a static callout in the preview instead.
   if (b.type === 'admonition') b = { ...b, collapse: 'none' }
@@ -315,35 +315,19 @@ function previewMarkdown(block: DocBlock): string {
 }
 
 // Blocks that render their published docs output by default and reveal a form on Edit.
-const PREVIEWABLE = new Set<DocBlock['type']>(['markdown', 'admonition', 'details', 'tabset', 'code'])
-// Of those, the ones with no internal interactivity can also be clicked anywhere to edit;
-// tabs / details stay clickable for their own controls, so they edit via the toolbar button.
-const CLICK_TO_EDIT = new Set<DocBlock['type']>(['markdown', 'admonition', 'code'])
+const PREVIEWABLE = new Set<DocBlock['type']>(['markdown', 'htmlBlock', 'admonition', 'details', 'tabset', 'code', 'raw'])
 
-// Rendered docs output for a previewable block. Click-to-edit where it won't fight the
-// block's own controls; otherwise the toolbar Edit button is the way in.
-function RenderedPreview({ block, onEdit }: { block: DocBlock; onEdit: () => void }) {
+// Rendered docs output for a previewable block. The rendered body stays read-only /
+// interactive; editing is always opened through the hover toolbar's Edit action.
+function RenderedPreview({ block }: { block: DocBlock }) {
   const md = previewMarkdown(block)
-  const body = md.trim()
-    ? <RichMarkdown text={md} />
-    : <Box sx={{ color: 'var(--muted)', fontStyle: 'italic' }}>Empty {block.type} — choose Edit to add content</Box>
-  if (CLICK_TO_EDIT.has(block.type)) {
-    return (
-      <Box className="render-preview">
-        <Box
-          className="zx-prose-block"
-          role="button"
-          tabIndex={0}
-          onClick={onEdit}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onEdit() } }}
-        >
-          <span className="zx-edit-hint"><EditOutlinedIcon sx={{ fontSize: 12 }} /> Edit</span>
-          {body}
-        </Box>
-      </Box>
-    )
-  }
-  return <Box className="render-preview zx-render-first">{body}</Box>
+  return (
+    <Box className="render-preview zx-render-first">
+      {md.trim()
+        ? <RichMarkdown text={md} />
+        : <Box sx={{ color: 'var(--muted)', fontStyle: 'italic' }}>Empty {block.type} — choose Edit to add content</Box>}
+    </Box>
+  )
 }
 
 function FrontmatterEditor({ block, onChange }: { block: Extract<DocBlock, { type: 'frontmatter' }>; onChange: (b: DocBlock) => void }) {
@@ -547,6 +531,64 @@ function GridEditor({ block, onChange }: { block: Extract<DocBlock, { type: 'gri
   )
 }
 
+function NestedBlocksEditor({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const blocks = parseDocument(value)
+  const commit = (next: DocBlock[]) => onChange(serializeDocument(next))
+  const updateNestedBlock = (i: number, replacement: BlockReplacement) => {
+    const next = [...blocks]
+    next.splice(i, 1, ...(Array.isArray(replacement) ? replacement : [replacement]))
+    commit(next)
+  }
+  const insertNestedBlock = (idx: number) => {
+    const next = [...blocks]
+    next.splice(idx, 0, newBlock('markdown'))
+    commit(next)
+  }
+  const duplicateNestedBlock = (idx: number) => {
+    const next = [...blocks]
+    next.splice(idx + 1, 0, clone(next[idx]))
+    commit(next)
+  }
+  const deleteNestedBlock = (idx: number) => commit(blocks.filter((_, i) => i !== idx))
+  const moveNestedBlock = (idx: number, dir: -1 | 1) => {
+    const target = idx + dir
+    if (target < 0 || target >= blocks.length) return
+    const next = [...blocks]
+    const [item] = next.splice(idx, 1)
+    next.splice(target, 0, item)
+    commit(next)
+  }
+
+  if (!blocks.length) {
+    return (
+      <Box className="nested-block-editor empty">
+        <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={() => commit([newBlock('markdown')])}>
+          Add content
+        </Button>
+      </Box>
+    )
+  }
+
+  return (
+    <Box className="nested-block-editor">
+      {blocks.map((inner, i) => (
+        <BlockEditor
+          key={i}
+          block={inner}
+          index={i}
+          total={blocks.length}
+          defaultEditing
+          onChange={(next) => updateNestedBlock(i, next)}
+          onInsertAfter={() => insertNestedBlock(i + 1)}
+          onDuplicate={() => duplicateNestedBlock(i)}
+          onDelete={() => deleteNestedBlock(i)}
+          onMove={(dir) => moveNestedBlock(i, dir)}
+        />
+      ))}
+    </Box>
+  )
+}
+
 function blockEditorBody(block: DocBlock, onChange: (b: DocBlock) => void): ReactNode {
   switch (block.type) {
     case 'markdown':
@@ -555,6 +597,21 @@ function blockEditorBody(block: DocBlock, onChange: (b: DocBlock) => void): Reac
       return <FrontmatterEditor block={block} onChange={onChange} />
     case 'htmlTable':
       return <TableEditor table={block.table} onChange={(table) => onChange({ ...block, table })} />
+    case 'htmlBlock':
+      return (
+        <>
+          <TextField
+            sx={{ mb: 1 }}
+            fullWidth
+            size="small"
+            label="HTML block"
+            value={block.spec}
+            onChange={(e) => onChange({ ...block, spec: e.target.value })}
+            placeholder="div.steps"
+          />
+          <MarkdownMiniEditor label="Markdown content" value={block.body} onChange={(body) => onChange({ ...block, body })} />
+        </>
+      )
     case 'markdownTable':
       return <MarkdownTableEditor table={block.table} onChange={(table) => onChange({ ...block, table })} />
     case 'admonition':
@@ -601,9 +658,10 @@ function blockEditorBody(block: DocBlock, onChange: (b: DocBlock) => void): Reac
         <>
           <FieldGrid>
             <TextField size="small" label="Summary" value={block.title} onChange={(e) => onChange({ ...block, title: e.target.value })} />
+            <TextField size="small" label="Style" value={block.kind ?? ''} onChange={(e) => onChange({ ...block, kind: e.target.value })} placeholder="example" />
             <FormControlLabel control={<Switch checked={block.open} onChange={(e) => onChange({ ...block, open: e.target.checked })} />} label="Open by default" />
           </FieldGrid>
-          <MarkdownMiniEditor label="Details content" value={block.body} onChange={(body) => onChange({ ...block, body })} />
+          <NestedBlocksEditor value={block.body} onChange={(body) => onChange({ ...block, body })} />
         </>
       )
     case 'tabset':
@@ -684,18 +742,20 @@ export default function BlockEditor({
   onDuplicate,
   onDelete,
   onMove,
+  defaultEditing = false,
 }: {
   block: DocBlock
   index: number
   total: number
-  onChange: (b: DocBlock) => void
+  onChange: (b: BlockReplacement) => void
   onInsertAfter: () => void
   onDuplicate: () => void
   onDelete: () => void
   onMove: (dir: -1 | 1) => void
+  defaultEditing?: boolean
 }) {
   const previewable = PREVIEWABLE.has(block.type)
-  const [editing, setEditing] = useState(false)
+  const [editing, setEditing] = useState(defaultEditing)
   const showForm = !previewable || editing
   return (
     <>
@@ -706,7 +766,6 @@ export default function BlockEditor({
         previewable={previewable}
         editing={editing}
         onToggleEdit={() => setEditing((e) => !e)}
-        onChange={onChange}
         onInsertAfter={onInsertAfter}
         onDuplicate={onDuplicate}
         onDelete={onDelete}
@@ -724,7 +783,7 @@ export default function BlockEditor({
             )}
           </>
         ) : (
-          <RenderedPreview block={block} onEdit={() => setEditing(true)} />
+          <RenderedPreview block={block} />
         )}
       </BlockShell>
       {index < total - 1 && <Divider className="block-divider" />}

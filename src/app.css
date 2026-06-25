@@ -221,6 +221,7 @@
 .prose strong { font-weight: 700; }
 .prose small { opacity: 0.75; }
 .prose mark { background-color: var(--md-typeset-mark-color); color: inherit; border-radius: 2px; }
+.prose mark.critic { padding: 0 0.12em; }
 .prose abbr { border-bottom: 1px dotted var(--md-default-fg-color--light); cursor: help; text-decoration: none; }
 
 /* lists */
@@ -323,6 +324,47 @@
 /* embedded markdown div results (pymdownx html blocks) */
 .prose .embed-result { margin-top: -0.75em; }
 
+/* pymdownx.tabbed / pymdownx.blocks.tab rendered from slash blocks inside Markdown */
+.prose .zx-tabbed-set {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 1em 0;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--md-default-bg-color);
+}
+.prose .zx-tabbed-set > input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.prose .zx-tabbed-set > label {
+  order: 1;
+  min-width: 3.2rem;
+  padding: 0.65em 1.2em;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 700;
+}
+.prose .zx-tabbed-set > label:hover { color: var(--fg); }
+.prose .zx-tabbed-set > input:checked + label {
+  color: var(--md-typeset-color);
+  border-bottom-color: var(--md-typeset-color);
+}
+.prose .zx-tabbed-set > .zx-tabbed-content {
+  order: 2;
+  display: none;
+  flex-basis: 100%;
+  min-width: 100%;
+  padding: 0.8em 1em;
+  border-top: 1px solid var(--line);
+}
+.prose .zx-tabbed-set > input:checked + label + .zx-tabbed-content { display: block; }
+.prose .zx-tabbed-content > :first-child { margin-top: 0; }
+.prose .zx-tabbed-content > :last-child { margin-bottom: 0; }
+
 /* buttons + grid cards (zensical docs output, shown in the real preview) */
 .prose .md-button {
   display: inline-block;
@@ -403,16 +445,68 @@
 .prose .admonition.example { --zx-adm-color: #7c4dff; }
 .prose .admonition.quote { --zx-adm-color: #9e9e9e; }
 
+.prose details.admonition { padding-top: 0.2rem; }
+.prose details.admonition > summary.admonition-title {
+  cursor: pointer;
+  list-style: none;
+}
+.prose details.admonition > summary.admonition-title::-webkit-details-marker { display: none; }
+.prose details.admonition > summary.admonition-title::after {
+  content: "›";
+  float: right;
+  color: var(--zx-adm-color, #448aff);
+  font-size: 1.25em;
+  line-height: 1;
+  transition: transform 0.12s;
+}
+.prose details.admonition[open] > summary.admonition-title::after { transform: rotate(90deg); }
+.prose .admonition-body > :first-child { margin-top: 0; }
+.prose .admonition-body > :last-child { margin-bottom: 0; }
+
+.prose .footnote {
+  margin-top: 2em;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.85em;
+}
+.prose .footnote ol { padding-left: 1.4em; }
+.prose .footnote li:target { color: var(--md-typeset-color); }
+.prose .footnote-backref { margin-left: 0.35em; text-decoration: none; }
+.prose .footnote-ref { text-decoration: none; }
+
+.prose .zx-media {
+  margin: 1em 0;
+}
+.prose .zx-media-youtube {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+}
+.prose .zx-media iframe,
+.prose .zx-media video {
+  width: 100%;
+  border: 0;
+  border-radius: 4px;
+  background: var(--md-code-bg-color);
+}
+.prose .zx-media-youtube iframe {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+}
+
 /* ======================================================================
    Material-style steps (kept from the original) + admonition preview
    ====================================================================== */
-.steps > .prose > ol { counter-reset: item; }
-.steps > .prose > ol > li {
+.steps > .prose > ol,
+.prose .steps > ol { counter-reset: item; }
+.steps > .prose > ol > li,
+.prose .steps > ol > li {
   position: relative;
   padding-left: 1em;
   list-style: none;
 }
-.steps > .prose > ol > li::before {
+.steps > .prose > ol > li::before,
+.prose .steps > ol > li::before {
   position: absolute;
   top: 0;
   left: 0;
@@ -430,7 +524,8 @@
   content: counter(item);
   counter-increment: item;
 }
-.steps > .prose > ol > li::after {
+.steps > .prose > ol > li::after,
+.prose .steps > ol > li::after {
   position: absolute;
   top: 0;
   bottom: 0;
@@ -501,17 +596,26 @@
   white-space: nowrap;
 }
 .block-bar .block-detail { display: none; }
-/* the Edit / Done toggle is the primary action — make it stand out in the toolbar */
-.block-edit-toggle.MuiButton-root {
-  min-width: 0;
-  padding: 1px 10px;
-  color: var(--md-primary-fg-color);
-  background: color-mix(in srgb, var(--md-primary-fg-color) 12%, transparent);
-  border-radius: 100px;
-  font-size: 11px;
+.block-bar .MuiIconButton-root {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  color: var(--fg);
 }
-.block-edit-toggle.MuiButton-root:hover {
-  background: color-mix(in srgb, var(--md-primary-fg-color) 20%, transparent);
+.block-bar .MuiIconButton-root .MuiSvgIcon-root {
+  color: inherit;
+}
+/* the Edit / Done toggle is the primary action in the icon toolbar */
+.block-edit-toggle.MuiIconButton-root {
+  display: inline-flex;
+  color: var(--fg) !important;
+  background: transparent;
+}
+.block-edit-toggle.MuiIconButton-root:hover {
+  background: var(--zx-surface-hover);
+}
+.block-edit-toggle.MuiIconButton-root .MuiSvgIcon-root {
+  color: inherit !important;
 }
 
 .block-body { padding: 0; }
@@ -574,6 +678,26 @@
   color: var(--muted);
   font-size: 12px;
 }
+.nested-block-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+  padding-left: 12px;
+  border-left: 2px solid color-mix(in srgb, var(--md-primary-fg-color) 35%, var(--line));
+}
+.nested-block-editor.empty {
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: var(--zx-surface-hover);
+}
+.nested-block-editor > .block-card {
+  margin: 0;
+}
+.nested-block-editor .block-bar {
+  min-height: 32px;
+}
 
 /* Insert menu — every block choice shows its icon and a one-line description of what it is */
 .zx-insert-item { align-items: flex-start; gap: 10px; padding: 7px 14px; }
@@ -602,30 +726,8 @@
 
 /* markdown block: rendered prose is primary; the source editor reveals on demand */
 .render-preview { padding: 2px 0; }
-.zx-prose-block { position: relative; border-radius: 6px; cursor: text; transition: background 0.12s; }
-.zx-prose-block:hover { background: var(--zx-surface-hover); box-shadow: 0 0 0 6px var(--zx-surface-hover); }
-.zx-edit-hint {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 7px;
-  font-size: 10.5px;
-  font-weight: 600;
-  color: var(--muted);
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 100px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.12s;
-}
-.zx-prose-block:hover .zx-edit-hint { opacity: 1; }
 
-/* render-first container for interactive blocks (tabs / details) — editing is via the
-   block toolbar's Edit button, so the block's own controls stay clickable */
+/* render-first container for remaining non-click-to-edit previews */
 .zx-render-first { position: relative; }
 
 .mini-editor { margin-top: 6px; }
