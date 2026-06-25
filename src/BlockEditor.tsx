@@ -38,8 +38,6 @@ import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined'
 import LinkIcon from '@mui/icons-material/Link'
 import NotesOutlinedIcon from '@mui/icons-material/NotesOutlined'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
-import RawOffIcon from '@mui/icons-material/RawOff'
-import RawOnIcon from '@mui/icons-material/RawOn'
 import RemoveIcon from '@mui/icons-material/Remove'
 import SplitscreenOutlinedIcon from '@mui/icons-material/SplitscreenOutlined'
 import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined'
@@ -102,7 +100,7 @@ function blockTitle(block: DocBlock): { title: string; detail: string; Icon: Svg
     case 'grid':
       return { title: 'Grid cards', detail: `${block.cards.length} cards`, Icon: GridViewOutlinedIcon }
     case 'raw':
-      return { title: 'Raw block', detail: block.label, Icon: RawOnIcon }
+      return { title: 'Raw block', detail: block.label, Icon: CodeIcon }
   }
 }
 
@@ -114,7 +112,6 @@ function BlockShell({
   previewable,
   editing,
   onToggleEdit,
-  onChange,
   onInsertAfter,
   onDuplicate,
   onDelete,
@@ -127,7 +124,6 @@ function BlockShell({
   previewable: boolean
   editing: boolean
   onToggleEdit: () => void
-  onChange: (b: BlockReplacement) => void
   onInsertAfter: () => void
   onDuplicate: () => void
   onDelete: () => void
@@ -152,22 +148,6 @@ function BlockShell({
               onClick={onToggleEdit}
             >
               {editing ? <VisibilityOutlinedIcon sx={{ fontSize: 17 }} /> : <EditOutlinedIcon sx={{ fontSize: 17 }} />}
-            </IconButton>
-          </Tooltip>
-        )}
-        {block.type === 'raw' ? (
-          <Tooltip title="Parse raw Markdown into editable blocks">
-            <IconButton size="small" onClick={() => {
-              const parsed = parseDocument(block.text)
-              if (parsed.length) onChange(parsed)
-            }}>
-              <RawOffIcon sx={{ fontSize: 17 }} />
-            </IconButton>
-          </Tooltip>
-        ) : (
-          <Tooltip title="Convert this block to raw Markdown">
-            <IconButton size="small" onClick={() => onChange({ type: 'raw', label: title.toLowerCase(), text: serializeDocument([block]) })}>
-              <RawOnIcon sx={{ fontSize: 17 }} />
             </IconButton>
           </Tooltip>
         )}
@@ -786,7 +766,6 @@ export default function BlockEditor({
         previewable={previewable}
         editing={editing}
         onToggleEdit={() => setEditing((e) => !e)}
-        onChange={onChange}
         onInsertAfter={onInsertAfter}
         onDuplicate={onDuplicate}
         onDelete={onDelete}
