@@ -15,6 +15,29 @@ export interface GitHubTarget {
 
 // Strip a trailing slash and an optional `.git` suffix from a repo segment.
 const cleanRepo = (repo: string): string => repo.replace(/\.git$/, '')
+const decodeSegment = (segment: string): string => {
+  try {
+    return decodeURIComponent(segment)
+  } catch {
+    return segment
+  }
+}
+
+export function buildGitHubTreeUrl(target: Required<GitHubTarget>): string {
+  const root = [
+    'https://github.com',
+    encodeURIComponent(target.owner),
+    encodeURIComponent(target.repo),
+    'tree',
+    encodeURIComponent(target.branch),
+  ].join('/')
+  const path = target.subPath
+    .split('/')
+    .filter(Boolean)
+    .map(encodeURIComponent)
+    .join('/')
+  return path ? `${root}/${path}` : root
+}
 
 export function parseGitHubUrl(input: string): GitHubTarget | null {
   const trimmed = input.trim()
@@ -36,7 +59,7 @@ export function parseGitHubUrl(input: string): GitHubTarget | null {
 
   if (url.hostname !== 'github.com' && url.hostname !== 'www.github.com') return null
 
-  const segments = url.pathname.split('/').filter(Boolean)
+  const segments = url.pathname.split('/').filter(Boolean).map(decodeSegment)
   if (segments.length < 2) return null
 
   const [owner, rawRepo, kind, ...rest] = segments

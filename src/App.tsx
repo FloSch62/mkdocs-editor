@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react'
 import {
   AppBar,
   Box,
@@ -52,7 +52,7 @@ import LoadFromGitHub from './components/LoadFromGitHub.tsx'
 import { SAMPLE } from './sample.ts'
 import { initialWorkspace, workspaceReducer, workspaceRepoKey } from './workspace/reducer.ts'
 import type { LoadResult } from './github/api.ts'
-import { fetchRawFile } from './github/api.ts'
+import { fetchRawFile, GitHubError, loadRepoMarkdown } from './github/api.ts'
 import { exportZip } from './workspace/zip.ts'
 import {
   AssetResolverContext,
@@ -61,6 +61,8 @@ import {
   type AssetResolver,
 } from './preview/assets.ts'
 import { scopeCss } from './preview/css.ts'
+import { getToken } from './github/token.ts'
+import { buildShareUrl, clearShareUrl, findSharedFile, parseSharedRepoState } from './github/share.ts'
 
 const clone = <T,>(v: T): T => structuredClone(v)
 
@@ -147,8 +149,13 @@ function outlineLabel(block: DocBlock): string {
 
 interface TocEntry { id: string; text: string; level: number }
 
-const scrollToId = (id: string) =>
-  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+const HEADING_SELECTOR = '.prose h1, .prose h2, .prose h3'
+
+function tocEqual(a: TocEntry[], b: TocEntry[]): boolean {
+  return a.length === b.length && a.every((entry, i) =>
+    entry.id === b[i].id && entry.text === b[i].text && entry.level === b[i].level,
+  )
+}
 
 const triggerDownload = (blob: Blob, filename: string) => {
   const a = document.createElement('a')
@@ -156,6 +163,20 @@ const triggerDownload = (blob: Blob, filename: string) => {
   a.download = filename
   a.click()
   URL.revokeObjectURL(a.href)
+}
+
+const replaceBrowserUrl = (href: string) => {
+  if (href !== window.location.href) window.history.replaceState(window.history.state, '', href)
+}
+
+const formatSharedLoadError = (err: unknown): string => {
+  if (err instanceof GitHubError && err.kind === 'rate-limit') {
+    const when = err.resetAt
+      ? err.resetAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : 'later'
+    return `Could not open shared link: GitHub rate limit reached. Resets around ${when}.`
+  }
+  return `Could not open shared link: ${(err as Error)?.message || 'Failed to load repository.'}`
 }
 
 export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: () => void }) {
@@ -166,6 +187,14 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
   const [insertAnchor, setInsertAnchor] = useState<HTMLElement | null>(null)
   const [exportAnchor, setExportAnchor] = useState<HTMLElement | null>(null)
   const [repoStyles, setRepoStyles] = useState(true)
+  const initialShareState = useRef(parseSharedRepoState(window.location.search))
+  const sharedLoadStarted = useRef(false)
+  const ignoreSharedLoad = useRef(false)
+  const [urlSyncReady, setUrlSyncReady] = useState(() => !initialShareState.current)
+  const [sharedLoad, setSharedLoad] = useState(() => ({
+    loading: Boolean(initialShareState.current),
+    error: null as string | null,
+  }))
 
   const mainRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
@@ -180,6 +209,31 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
   const canRedo = (activeFile?.history?.future.length ?? 0) > 0
 
   const markdown = useMemo(() => (blocks ? serializeDocument(blocks) : ''), [blocks])
+
+  const assignHeadingIds = useCallback((): HTMLElement[] => {
+    const content = contentRef.current
+    if (!content) return []
+    const headingEls = Array.from(content.querySelectorAll(HEADING_SELECTOR)) as HTMLElement[]
+    headingEls.forEach((el, i) => {
+      if (!el.id) el.id = `zx-h-${i}`
+    })
+    return headingEls
+  }, [])
+
+  // RichMarkdown uses dangerouslySetInnerHTML. A parent state update can replace that HTML
+  // and drop the synthetic heading IDs, so restore them after every render.
+  useLayoutEffect(() => {
+    assignHeadingIds()
+  })
+
+  const scrollToId = useCallback((id: string) => {
+    const scroller = mainRef.current
+    const el = document.getElementById(id)
+    if (!scroller || !el) return
+    const marginTop = Number.parseFloat(getComputedStyle(el).scrollMarginTop) || 0
+    const targetTop = el.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop
+    scroller.scrollTo({ top: Math.max(0, targetTop - marginTop), behavior: 'smooth' })
+  }, [])
 
   // Resolve relative image paths in the preview against the active file's directory on
   // raw.githubusercontent.com. Identity (no rewriting) in paste/single-doc mode.
@@ -205,8 +259,20 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
     dispatch({ type: 'commit', path: activePath, updater })
   }, [activePath])
 
+  const markUserWorkspaceChoice = () => {
+    ignoreSharedLoad.current = true
+    setSharedLoad((prev) => (prev.loading || prev.error ? { loading: false, error: null } : prev))
+    setUrlSyncReady(true)
+  }
+
   const openDocument = (src: string) => {
+    markUserWorkspaceChoice()
     dispatch({ type: 'openSingle', blocks: parseDocument(src) })
+  }
+
+  const startBlankDocument = () => {
+    markUserWorkspaceChoice()
+    dispatch({ type: 'openSingle', blocks: [newBlock('frontmatter'), newBlock('markdown')] })
   }
 
   const replaceFromMarkdown = (src: string) => {
@@ -218,6 +284,7 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
       `Discard unsaved edits in ${dirtyCount} file${dirtyCount > 1 ? 's' : ''}? Export a ZIP first to keep them.`,
     )) return
     dispatch({ type: 'reset' })
+    setUrlSyncReady(true)
     setPaste('')
     setPreview(false)
     setShowSource(false)
@@ -284,6 +351,7 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
   )
 
   const loadRepo = (res: LoadResult) => {
+    markUserWorkspaceChoice()
     setPreview(false)
     setShowSource(false)
     setInsertAnchor(null)
@@ -294,6 +362,11 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
   const selectFile = (path: string) => {
     setInsertAnchor(null)
     dispatch({ type: 'setActive', path })
+  }
+
+  const copyShareLink = () => {
+    if (!ws.meta) return
+    void navigator.clipboard?.writeText(buildShareUrl(window.location.href, ws.meta, activeFile))
   }
 
   const exportWorkspaceZip = async (onlyDirty: boolean) => {
@@ -326,6 +399,42 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
   }, [ws.meta, activeFile])
 
   useEffect(() => {
+    const shared = initialShareState.current
+    if (!shared || sharedLoadStarted.current) return
+
+    sharedLoadStarted.current = true
+    setSharedLoad({ loading: true, error: null })
+    loadRepoMarkdown(shared.repoUrl, getToken()?.trim() || undefined)
+      .then((res) => {
+        if (ignoreSharedLoad.current) return
+        setPreview(false)
+        setShowSource(false)
+        setInsertAnchor(null)
+        setRepoStyles(true)
+        dispatch({ type: 'loadRepo', meta: res.meta, files: res.files, css: res.css })
+
+        const file = findSharedFile(res.files, shared.filePath)
+        if (file) dispatch({ type: 'setActive', path: file.path })
+
+        setSharedLoad({ loading: false, error: null })
+        setUrlSyncReady(true)
+      })
+      .catch((err) => {
+        if (ignoreSharedLoad.current) return
+        setSharedLoad({ loading: false, error: formatSharedLoadError(err) })
+      })
+  }, [])
+
+  useEffect(() => {
+    if (!urlSyncReady) return
+    const next =
+      ws.mode === 'repo' && ws.meta
+        ? buildShareUrl(window.location.href, ws.meta, activeFile)
+        : clearShareUrl(window.location.href)
+    replaceBrowserUrl(next)
+  }, [activeFile, urlSyncReady, ws.meta, ws.mode])
+
+  useEffect(() => {
     if (!blocks) return
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -347,22 +456,30 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [blocks, canRedo, canUndo, redo, undo])
 
-  // Collect the on-page headings and wire scroll-spy for both the TOC and the outline.
-  // Re-runs whenever the rendered markdown changes.
+  // Collect current headings and wire scroll-spy for both the TOC and the outline.
   useEffect(() => {
+    if (!blocks) {
+      setToc((prev) => (prev.length ? [] : prev))
+      if (activeHeading !== null) setActiveHeading(null)
+      if (activeBlock !== null) setActiveBlock(null)
+      return
+    }
+
     const content = contentRef.current
     const scroller = mainRef.current
-    if (!content || !scroller) { setToc([]); return }
+    if (!content || !scroller) {
+      setToc((prev) => (prev.length ? [] : prev))
+      return
+    }
 
-    const headingEls = Array.from(
-      content.querySelectorAll('.prose h1, .prose h2, .prose h3'),
-    ) as HTMLElement[]
-    headingEls.forEach((el, i) => { if (!el.id) el.id = `zx-h-${i}` })
-    setToc(headingEls.map((el) => ({
+    const headingEls = assignHeadingIds()
+    const nextToc = headingEls.map((el) => ({
       id: el.id,
       text: el.textContent?.trim() || 'Untitled',
       level: Number(el.tagName[1]),
-    })))
+    }))
+    setToc((prev) => (tocEqual(prev, nextToc) ? prev : nextToc))
+    if (!headingEls.length && activeHeading !== null) setActiveHeading(null)
 
     const blockEls = Array.from(content.querySelectorAll('[data-zx-block]')) as HTMLElement[]
     const visibleH = new Set<Element>()
@@ -380,7 +497,7 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
     headingEls.forEach((el) => headingObs.observe(el))
     blockEls.forEach((el) => blockObs.observe(el))
     return () => { headingObs.disconnect(); blockObs.disconnect() }
-  }, [markdown])
+  }, [activeBlock, activeHeading, assignHeadingIds, blocks, markdown, toc])
 
   const bodyClass = showSource ? 'with-source' : toc.length ? '' : 'no-toc'
 
@@ -458,6 +575,13 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
                   <ContentCopyIcon />
                 </IconButton>
               </Tooltip>
+              {ws.mode === 'repo' && ws.meta && activeFile && (
+                <Tooltip title="Copy share link">
+                  <IconButton size="small" onClick={copyShareLink}>
+                    <LinkIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
               <Tooltip title={ws.mode === 'repo' ? 'Download this file' : 'Download .md'}>
                 <IconButton size="small" onClick={download}>
                   <DownloadIcon />
@@ -535,13 +659,23 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
               <Button variant="contained" disabled={!paste.trim()} onClick={() => openDocument(paste)}>
                 Open in editor
               </Button>
-              <Button variant="outlined" onClick={() => dispatch({ type: 'openSingle', blocks: [newBlock('frontmatter'), newBlock('markdown')] })}>
+              <Button variant="outlined" onClick={startBlankDocument}>
                 Start blank
               </Button>
               <Button variant="outlined" onClick={() => { setPaste(SAMPLE); openDocument(SAMPLE) }}>
                 Load sample
               </Button>
             </Box>
+            {sharedLoad.loading && (
+              <Typography variant="body2" sx={{ color: 'var(--muted)' }}>
+                Opening shared GitHub file...
+              </Typography>
+            )}
+            {sharedLoad.error && (
+              <Typography variant="body2" color="error" sx={{ maxWidth: 640, textAlign: 'center' }}>
+                {sharedLoad.error}
+              </Typography>
+            )}
             <LoadFromGitHub onLoaded={loadRepo} />
           </Box>
         </div>

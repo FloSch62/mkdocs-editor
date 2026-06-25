@@ -2,8 +2,10 @@
 // Parses the sample, re-serializes, re-parses, and asserts the two parses are deep-equal —
 // i.e. the serializer is a faithful inverse of the parser (modulo whitespace/comments).
 import { parseDocument, serializeDocument } from '../src/blocks.ts'
-import { parseGitHubUrl } from '../src/github/url.ts'
+import { buildGitHubTreeUrl, parseGitHubUrl } from '../src/github/url.ts'
+import { buildShareUrl, findSharedFile, parseSharedRepoState } from '../src/github/share.ts'
 import { SAMPLE } from '../src/sample.ts'
+import type { RepoMeta, WorkspaceFile } from '../src/workspace/types.ts'
 
 const FEATURE_SAMPLE = `---
 title: Feature page
@@ -91,6 +93,15 @@ function assertGitHubTarget(name: string, input: string, expected: object) {
   }
 }
 
+function assertEqual(name: string, actual: unknown, expected: unknown) {
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    console.error(`FAIL: ${name}`)
+    console.error('expected:', JSON.stringify(expected))
+    console.error('actual  :', JSON.stringify(actual))
+    process.exit(1)
+  }
+}
+
 const a = parseDocument(SAMPLE)
 const round = serializeDocument(a)
 const b = parseDocument(round)
@@ -144,4 +155,35 @@ assertGitHubTarget('nested blob URL', 'https://github.com/o/r/blob/main/docs/REA
   branch: 'main',
   subPath: 'docs',
 })
+const meta: RepoMeta = {
+  owner: 'srl-labs',
+  repo: 'containerlab',
+  branch: 'main',
+  subPath: 'docs',
+  truncated: false,
+}
+const activeFile: WorkspaceFile = {
+  path: 'docs/manual/kinds/srl.md',
+  displayPath: 'manual/kinds/srl.md',
+  sha: 'abc',
+  state: 'unloaded',
+  history: null,
+  baseline: null,
+  dirty: false,
+}
+const shareUrl = buildShareUrl('https://flosch62.github.io/mkdocs-editor/?theme=dark', meta, activeFile)
+const shared = parseSharedRepoState(new URL(shareUrl).search)
+assertEqual('share URL restores repo + relative file', shared, {
+  repoUrl: 'https://github.com/srl-labs/containerlab/tree/main/docs',
+  filePath: 'manual/kinds/srl.md',
+})
+assertEqual(
+  'share URL repo target parses',
+  parseGitHubUrl(shared!.repoUrl),
+  { owner: 'srl-labs', repo: 'containerlab', branch: 'main', subPath: 'docs' },
+)
+assertEqual('share URL keeps unrelated params', new URL(shareUrl).searchParams.get('theme'), 'dark')
+assertEqual('GitHub tree URL builder', buildGitHubTreeUrl(meta), 'https://github.com/srl-labs/containerlab/tree/main/docs')
+assertEqual('shared relative file lookup', findSharedFile([activeFile], 'manual/kinds/srl.md')?.path, activeFile.path)
+assertEqual('shared full file lookup', findSharedFile([activeFile], 'docs/manual/kinds/srl.md')?.path, activeFile.path)
 console.log('PASS: round-trip stable + structured blocks preserved')
