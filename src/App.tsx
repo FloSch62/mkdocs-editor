@@ -52,7 +52,7 @@ import LoadFromGitHub from './components/LoadFromGitHub.tsx'
 import { SAMPLE } from './sample.ts'
 import { initialWorkspace, workspaceReducer, workspaceRepoKey } from './workspace/reducer.ts'
 import type { LoadResult } from './github/api.ts'
-import { fetchRawFile } from './github/api.ts'
+import { fetchRawFile, GitHubError, loadRepoMarkdown } from './github/api.ts'
 import { exportZip } from './workspace/zip.ts'
 import {
   AssetResolverContext,
@@ -61,6 +61,8 @@ import {
   type AssetResolver,
 } from './preview/assets.ts'
 import { scopeCss } from './preview/css.ts'
+import { getToken } from './github/token.ts'
+import { buildShareUrl, clearShareUrl, findSharedFile, parseSharedRepoState } from './github/share.ts'
 
 const clone = <T,>(v: T): T => structuredClone(v)
 
@@ -163,6 +165,20 @@ const triggerDownload = (blob: Blob, filename: string) => {
   URL.revokeObjectURL(a.href)
 }
 
+const replaceBrowserUrl = (href: string) => {
+  if (href !== window.location.href) window.history.replaceState(window.history.state, '', href)
+}
+
+const formatSharedLoadError = (err: unknown): string => {
+  if (err instanceof GitHubError && err.kind === 'rate-limit') {
+    const when = err.resetAt
+      ? err.resetAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : 'later'
+    return `Could not open shared link: GitHub rate limit reached. Resets around ${when}.`
+  }
+  return `Could not open shared link: ${(err as Error)?.message || 'Failed to load repository.'}`
+}
+
 export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: () => void }) {
   const [ws, dispatch] = useReducer(workspaceReducer, undefined, initialWorkspace)
   const [paste, setPaste] = useState('')
@@ -171,6 +187,14 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
   const [insertAnchor, setInsertAnchor] = useState<HTMLElement | null>(null)
   const [exportAnchor, setExportAnchor] = useState<HTMLElement | null>(null)
   const [repoStyles, setRepoStyles] = useState(true)
+  const initialShareState = useRef(parseSharedRepoState(window.location.search))
+  const sharedLoadStarted = useRef(false)
+  const ignoreSharedLoad = useRef(false)
+  const [urlSyncReady, setUrlSyncReady] = useState(() => !initialShareState.current)
+  const [sharedLoad, setSharedLoad] = useState(() => ({
+    loading: Boolean(initialShareState.current),
+    error: null as string | null,
+  }))
 
   const mainRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
@@ -235,8 +259,20 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
     dispatch({ type: 'commit', path: activePath, updater })
   }, [activePath])
 
+  const markUserWorkspaceChoice = () => {
+    ignoreSharedLoad.current = true
+    setSharedLoad((prev) => (prev.loading || prev.error ? { loading: false, error: null } : prev))
+    setUrlSyncReady(true)
+  }
+
   const openDocument = (src: string) => {
+    markUserWorkspaceChoice()
     dispatch({ type: 'openSingle', blocks: parseDocument(src) })
+  }
+
+  const startBlankDocument = () => {
+    markUserWorkspaceChoice()
+    dispatch({ type: 'openSingle', blocks: [newBlock('frontmatter'), newBlock('markdown')] })
   }
 
   const replaceFromMarkdown = (src: string) => {
@@ -248,6 +284,7 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
       `Discard unsaved edits in ${dirtyCount} file${dirtyCount > 1 ? 's' : ''}? Export a ZIP first to keep them.`,
     )) return
     dispatch({ type: 'reset' })
+    setUrlSyncReady(true)
     setPaste('')
     setPreview(false)
     setShowSource(false)
@@ -314,6 +351,7 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
   )
 
   const loadRepo = (res: LoadResult) => {
+    markUserWorkspaceChoice()
     setPreview(false)
     setShowSource(false)
     setInsertAnchor(null)
@@ -324,6 +362,11 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
   const selectFile = (path: string) => {
     setInsertAnchor(null)
     dispatch({ type: 'setActive', path })
+  }
+
+  const copyShareLink = () => {
+    if (!ws.meta) return
+    void navigator.clipboard?.writeText(buildShareUrl(window.location.href, ws.meta, activeFile))
   }
 
   const exportWorkspaceZip = async (onlyDirty: boolean) => {
@@ -354,6 +397,42 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
       .catch((err) => dispatch({ type: 'fileError', path, repoKey, error: (err as Error).message }))
       .finally(() => inFlight.current.delete(requestKey))
   }, [ws.meta, activeFile])
+
+  useEffect(() => {
+    const shared = initialShareState.current
+    if (!shared || sharedLoadStarted.current) return
+
+    sharedLoadStarted.current = true
+    setSharedLoad({ loading: true, error: null })
+    loadRepoMarkdown(shared.repoUrl, getToken()?.trim() || undefined)
+      .then((res) => {
+        if (ignoreSharedLoad.current) return
+        setPreview(false)
+        setShowSource(false)
+        setInsertAnchor(null)
+        setRepoStyles(true)
+        dispatch({ type: 'loadRepo', meta: res.meta, files: res.files, css: res.css })
+
+        const file = findSharedFile(res.files, shared.filePath)
+        if (file) dispatch({ type: 'setActive', path: file.path })
+
+        setSharedLoad({ loading: false, error: null })
+        setUrlSyncReady(true)
+      })
+      .catch((err) => {
+        if (ignoreSharedLoad.current) return
+        setSharedLoad({ loading: false, error: formatSharedLoadError(err) })
+      })
+  }, [])
+
+  useEffect(() => {
+    if (!urlSyncReady) return
+    const next =
+      ws.mode === 'repo' && ws.meta
+        ? buildShareUrl(window.location.href, ws.meta, activeFile)
+        : clearShareUrl(window.location.href)
+    replaceBrowserUrl(next)
+  }, [activeFile, urlSyncReady, ws.meta, ws.mode])
 
   useEffect(() => {
     if (!blocks) return
@@ -496,6 +575,13 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
                   <ContentCopyIcon />
                 </IconButton>
               </Tooltip>
+              {ws.mode === 'repo' && ws.meta && activeFile && (
+                <Tooltip title="Copy share link">
+                  <IconButton size="small" onClick={copyShareLink}>
+                    <LinkIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
               <Tooltip title={ws.mode === 'repo' ? 'Download this file' : 'Download .md'}>
                 <IconButton size="small" onClick={download}>
                   <DownloadIcon />
@@ -573,13 +659,23 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
               <Button variant="contained" disabled={!paste.trim()} onClick={() => openDocument(paste)}>
                 Open in editor
               </Button>
-              <Button variant="outlined" onClick={() => dispatch({ type: 'openSingle', blocks: [newBlock('frontmatter'), newBlock('markdown')] })}>
+              <Button variant="outlined" onClick={startBlankDocument}>
                 Start blank
               </Button>
               <Button variant="outlined" onClick={() => { setPaste(SAMPLE); openDocument(SAMPLE) }}>
                 Load sample
               </Button>
             </Box>
+            {sharedLoad.loading && (
+              <Typography variant="body2" sx={{ color: 'var(--muted)' }}>
+                Opening shared GitHub file...
+              </Typography>
+            )}
+            {sharedLoad.error && (
+              <Typography variant="body2" color="error" sx={{ maxWidth: 640, textAlign: 'center' }}>
+                {sharedLoad.error}
+              </Typography>
+            )}
             <LoadFromGitHub onLoaded={loadRepo} />
           </Box>
         </div>
