@@ -221,6 +221,7 @@
 .prose strong { font-weight: 700; }
 .prose small { opacity: 0.75; }
 .prose mark { background-color: var(--md-typeset-mark-color); color: inherit; border-radius: 2px; }
+.prose mark.critic { padding: 0 0.12em; }
 .prose abbr { border-bottom: 1px dotted var(--md-default-fg-color--light); cursor: help; text-decoration: none; }
 
 /* lists */
@@ -323,6 +324,47 @@
 /* embedded markdown div results (pymdownx html blocks) */
 .prose .embed-result { margin-top: -0.75em; }
 
+/* pymdownx.tabbed / pymdownx.blocks.tab rendered from slash blocks inside Markdown */
+.prose .zx-tabbed-set {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 1em 0;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--md-default-bg-color);
+}
+.prose .zx-tabbed-set > input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.prose .zx-tabbed-set > label {
+  order: 1;
+  min-width: 3.2rem;
+  padding: 0.65em 1.2em;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 700;
+}
+.prose .zx-tabbed-set > label:hover { color: var(--fg); }
+.prose .zx-tabbed-set > input:checked + label {
+  color: var(--md-typeset-color);
+  border-bottom-color: var(--md-typeset-color);
+}
+.prose .zx-tabbed-set > .zx-tabbed-content {
+  order: 2;
+  display: none;
+  flex-basis: 100%;
+  min-width: 100%;
+  padding: 0.8em 1em;
+  border-top: 1px solid var(--line);
+}
+.prose .zx-tabbed-set > input:checked + label + .zx-tabbed-content { display: block; }
+.prose .zx-tabbed-content > :first-child { margin-top: 0; }
+.prose .zx-tabbed-content > :last-child { margin-bottom: 0; }
+
 /* buttons + grid cards (zensical docs output, shown in the real preview) */
 .prose .md-button {
   display: inline-block;
@@ -403,16 +445,68 @@
 .prose .admonition.example { --zx-adm-color: #7c4dff; }
 .prose .admonition.quote { --zx-adm-color: #9e9e9e; }
 
+.prose details.admonition { padding-top: 0.2rem; }
+.prose details.admonition > summary.admonition-title {
+  cursor: pointer;
+  list-style: none;
+}
+.prose details.admonition > summary.admonition-title::-webkit-details-marker { display: none; }
+.prose details.admonition > summary.admonition-title::after {
+  content: "›";
+  float: right;
+  color: var(--zx-adm-color, #448aff);
+  font-size: 1.25em;
+  line-height: 1;
+  transition: transform 0.12s;
+}
+.prose details.admonition[open] > summary.admonition-title::after { transform: rotate(90deg); }
+.prose .admonition-body > :first-child { margin-top: 0; }
+.prose .admonition-body > :last-child { margin-bottom: 0; }
+
+.prose .footnote {
+  margin-top: 2em;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.85em;
+}
+.prose .footnote ol { padding-left: 1.4em; }
+.prose .footnote li:target { color: var(--md-typeset-color); }
+.prose .footnote-backref { margin-left: 0.35em; text-decoration: none; }
+.prose .footnote-ref { text-decoration: none; }
+
+.prose .zx-media {
+  margin: 1em 0;
+}
+.prose .zx-media-youtube {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+}
+.prose .zx-media iframe,
+.prose .zx-media video {
+  width: 100%;
+  border: 0;
+  border-radius: 4px;
+  background: var(--md-code-bg-color);
+}
+.prose .zx-media-youtube iframe {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+}
+
 /* ======================================================================
    Material-style steps (kept from the original) + admonition preview
    ====================================================================== */
-.steps > .prose > ol { counter-reset: item; }
-.steps > .prose > ol > li {
+.steps > .prose > ol,
+.prose .steps > ol { counter-reset: item; }
+.steps > .prose > ol > li,
+.prose .steps > ol > li {
   position: relative;
   padding-left: 1em;
   list-style: none;
 }
-.steps > .prose > ol > li::before {
+.steps > .prose > ol > li::before,
+.prose .steps > ol > li::before {
   position: absolute;
   top: 0;
   left: 0;
@@ -430,7 +524,8 @@
   content: counter(item);
   counter-increment: item;
 }
-.steps > .prose > ol > li::after {
+.steps > .prose > ol > li::after,
+.prose .steps > ol > li::after {
   position: absolute;
   top: 0;
   bottom: 0;

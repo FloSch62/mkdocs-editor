@@ -1,4 +1,4 @@
-import { useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { createContext, useContext, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
 import {
   Accordion,
   AccordionDetails,
@@ -29,6 +29,16 @@ type RichNode =
   | { type: 'md'; text: string }
   | { type: 'block'; kind: string; title: string | null; children: RichNode[] }
   | { type: 'snippet'; path: string }
+
+const ReferenceDefinitionsContext = createContext('')
+
+export function MarkdownReferenceDefinitionsProvider({ value, children }: { value: string; children: ReactNode }) {
+  return (
+    <ReferenceDefinitionsContext.Provider value={value}>
+      {children}
+    </ReferenceDefinitionsContext.Provider>
+  )
+}
 
 const OPEN = /^(\s*)(\/{3,})\s+([A-Za-z][\w-]*)\s*(?:\|\s*(.*?))?\s*$/
 const CLOSE = /^(\s*)(\/{3,})\s*$/
@@ -115,14 +125,15 @@ function parseUntil(lines: string[], start: number, marker: number, indent: stri
 
 function Md({ text }: { text: string }) {
   const resolve = useAssetResolver()
+  const referenceDefinitions = useContext(ReferenceDefinitionsContext)
   // Re-render when an on-demand icon SVG finishes loading, so it gets inlined into the html.
   const iconsV = useSyncExternalStore(subscribeIcons, iconsVersion)
   const html = useMemo(
-    () => (text.trim() ? resolveHtmlAssets(renderMarkdown(text), resolve) : ''),
+    () => (text.trim() ? resolveHtmlAssets(renderMarkdown(text, { referenceDefinitions }), resolve) : ''),
     // iconsV is a re-render signal: renderMarkdown reads the (global) icon cache, so when a
     // fetched icon lands we recompute to inline it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [text, resolve, iconsV],
+    [text, resolve, referenceDefinitions, iconsV],
   )
   if (!html) return null
   return <div className="prose" dangerouslySetInnerHTML={{ __html: html }} />

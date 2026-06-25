@@ -364,6 +364,10 @@ function parseGrid(body: string): GridCard[] {
   return cards.length ? cards : [{ title: 'Card', href: '', body: body.trim() }]
 }
 
+function isGridCardsSpec(spec: string): boolean {
+  return /^div(?:#[A-Za-z0-9_-]+)?(?:\.[A-Za-z0-9_-]+)*\.grid(?:\.[A-Za-z0-9_-]+)*\.cards(?:\.[A-Za-z0-9_-]+)*(?:\s|$)/.test(spec.trim())
+}
+
 function zensicalBlock(kind: string, title: string, body: string): string {
   const head = title.trim() ? `/// ${kind} | ${title.trim()}` : `/// ${kind}`
   return [head, body.trim(), '///'].join('\n')
@@ -459,7 +463,7 @@ export function parseDocument(src: string): DocBlock[] {
         i = block.next
         continue
       }
-      if (kind === 'html' && /^div(?:\.grid)?(?:\.cards)?/.test(open[4] ?? '')) {
+      if (kind === 'html' && isGridCardsSpec(open[4] ?? '')) {
         flush()
         const block = readSlashBlock(lines, i)
         blocks.push({ type: 'grid', cards: parseGrid(block.body) })

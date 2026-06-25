@@ -315,7 +315,7 @@ function previewMarkdown(block: DocBlock): string {
 }
 
 // Blocks that render their published docs output by default and reveal a form on Edit.
-const PREVIEWABLE = new Set<DocBlock['type']>(['markdown', 'admonition', 'details', 'tabset', 'code'])
+const PREVIEWABLE = new Set<DocBlock['type']>(['markdown', 'admonition', 'details', 'tabset', 'code', 'raw'])
 // Of those, the ones with no internal interactivity can also be clicked anywhere to edit;
 // tabs / details stay clickable for their own controls, so they edit via the toolbar button.
 const CLICK_TO_EDIT = new Set<DocBlock['type']>(['markdown', 'admonition', 'code'])

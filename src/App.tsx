@@ -47,6 +47,8 @@ import {
 import BlockEditor from './BlockEditor.tsx'
 import DocPreview from './DocPreview.tsx'
 import ZensicalLogo from './ZensicalLogo.tsx'
+import { extractReferenceDefinitions } from './markdown.ts'
+import { MarkdownReferenceDefinitionsProvider } from './RichMarkdown.tsx'
 import FileTree from './components/FileTree.tsx'
 import LoadFromGitHub from './components/LoadFromGitHub.tsx'
 import { SAMPLE } from './sample.ts'
@@ -209,6 +211,7 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
   const canRedo = (activeFile?.history?.future.length ?? 0) > 0
 
   const markdown = useMemo(() => (blocks ? serializeDocument(blocks) : ''), [blocks])
+  const referenceDefinitions = useMemo(() => extractReferenceDefinitions(markdown), [markdown])
 
   const assignHeadingIds = useCallback((): HTMLElement[] => {
     const content = contentRef.current
@@ -503,6 +506,7 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
 
   return (
     <AssetResolverContext.Provider value={assetResolver}>
+    <MarkdownReferenceDefinitionsProvider value={referenceDefinitions}>
     <div className="app-shell">
       <AppBar className="zx-header" position="static" elevation={0}>
         <Toolbar variant="dense" sx={{ gap: 1 }}>
@@ -797,6 +801,7 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
         </div>
       )}
     </div>
+    </MarkdownReferenceDefinitionsProvider>
     </AssetResolverContext.Provider>
   )
 }
