@@ -796,3 +796,82 @@
   border-radius: 10px; padding: 14px;
 }
 .empty-logo { width: 56px; height: 56px; margin-bottom: 4px; }
+
+/* ======================================================================
+   GitHub repo workspace — file tree + load form
+   ====================================================================== */
+.zx-side-sub {
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  opacity: 0.7;
+  margin-left: 4px;
+  font-size: 10.5px;
+}
+.zx-filetree { display: flex; flex-direction: column; gap: 1px; margin-bottom: 16px; }
+.zx-tree-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 4px 8px;
+}
+.zx-tree-tools .MuiInputBase-root { font-size: 12.5px; }
+.zx-tree-tools .MuiInputBase-input { padding-top: 5px; padding-bottom: 5px; }
+.zx-tree-empty { padding: 4px 10px; color: var(--muted); font-size: 12px; font-style: italic; opacity: 0.7; }
+
+/* MkDocs-Material inline icons (`:material-…:` shortcodes → fetched SVG) */
+.prose .twemoji { display: inline-flex; height: 1.125em; vertical-align: text-bottom; }
+.prose .twemoji svg { width: 1.125em; height: 1.125em; fill: currentColor; }
+.prose .twemoji.middle { vertical-align: middle; }
+.prose .twemoji.lg { height: 1.5em; }
+.prose .twemoji.lg svg { width: 1.5em; height: 1.5em; }
+.prose .twemoji.xl { height: 2.25em; }
+.prose .twemoji.xl svg { width: 2.25em; height: 2.25em; }
+.prose .twemoji.xxl { height: 3em; }
+.prose .twemoji.xxl svg { width: 3em; height: 3em; }
+.zx-tree-folder .zx-nav-label { font-weight: 600; color: var(--fg); }
+.zx-tree-caret { font-size: 16px !important; flex-shrink: 0; opacity: 0.55; margin-left: -4px; }
+.zx-tree-file .zx-nav-label { flex: 1; }
+.zx-dirty-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--md-primary-fg-color);
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.zx-dirty-dot--error { background: #e5484d; }
+.zx-tree-warn {
+  margin: 0 4px 12px;
+  padding: 6px 9px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--fg);
+  background: color-mix(in srgb, #e5a23d 16%, transparent);
+  border: 1px solid color-mix(in srgb, #e5a23d 40%, transparent);
+}
+
+.zx-gh-load {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  width: 100%;
+  max-width: 640px;
+  margin-top: 8px;
+}
+.zx-gh-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  color: var(--muted);
+  font-size: 12px;
+}
+.zx-gh-divider::before,
+.zx-gh-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
