@@ -18,6 +18,7 @@ import DarkModeIcon from '@mui/icons-material/DarkMode'
 import CodeIcon from '@mui/icons-material/Code'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import DownloadIcon from '@mui/icons-material/Download'
+import FolderZipOutlinedIcon from '@mui/icons-material/FolderZipOutlined'
 import RedoIcon from '@mui/icons-material/Redo'
 import UndoIcon from '@mui/icons-material/Undo'
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
@@ -45,76 +46,18 @@ import {
 import BlockEditor from './BlockEditor.tsx'
 import DocPreview from './DocPreview.tsx'
 import ZensicalLogo from './ZensicalLogo.tsx'
+import FileTree from './components/FileTree.tsx'
+import LoadFromGitHub from './components/LoadFromGitHub.tsx'
 import { SAMPLE } from './sample.ts'
+import { initialWorkspace, workspaceReducer } from './workspace/reducer.ts'
+import type { LoadResult } from './github/api.ts'
+import { fetchRawFile } from './github/api.ts'
+import { exportZip } from './workspace/zip.ts'
 
 const clone = <T,>(v: T): T => structuredClone(v)
 
-const HISTORY_LIMIT = 100
-
 type BlocksState = DocBlock[] | null
 type BlocksUpdater = BlocksState | ((prev: BlocksState) => BlocksState)
-
-interface DocumentHistory {
-  past: DocBlock[][]
-  present: BlocksState
-  future: DocBlock[][]
-}
-
-type HistoryAction =
-  | { type: 'commit'; updater: BlocksUpdater }
-  | { type: 'reset'; blocks: BlocksState }
-  | { type: 'undo' }
-  | { type: 'redo' }
-
-const snapshot = (blocks: DocBlock[]): DocBlock[] => clone(blocks)
-
-function sameBlocks(a: BlocksState, b: BlocksState): boolean {
-  if (a === b) return true
-  if (!a || !b) return a === b
-  return JSON.stringify(a) === JSON.stringify(b)
-}
-
-function documentHistoryReducer(state: DocumentHistory, action: HistoryAction): DocumentHistory {
-  switch (action.type) {
-    case 'reset':
-      return {
-        past: [],
-        present: action.blocks ? snapshot(action.blocks) : null,
-        future: [],
-      }
-    case 'commit': {
-      const nextValue = typeof action.updater === 'function'
-        ? action.updater(state.present)
-        : action.updater
-      const next = nextValue ? snapshot(nextValue) : null
-      if (sameBlocks(state.present, next)) return state
-      if (!state.present || !next) return { past: [], present: next, future: [] }
-      return {
-        past: [...state.past, snapshot(state.present)].slice(-HISTORY_LIMIT),
-        present: next,
-        future: [],
-      }
-    }
-    case 'undo': {
-      const previous = state.past.at(-1)
-      if (!previous || !state.present) return state
-      return {
-        past: state.past.slice(0, -1),
-        present: snapshot(previous),
-        future: [snapshot(state.present), ...state.future].slice(0, HISTORY_LIMIT),
-      }
-    }
-    case 'redo': {
-      const next = state.future[0]
-      if (!next || !state.present) return state
-      return {
-        past: [...state.past, snapshot(state.present)].slice(-HISTORY_LIMIT),
-        present: snapshot(next),
-        future: state.future.slice(1),
-      }
-    }
-  }
-}
 
 // Each insert option carries a one-line description so the menu explains what the block
 // is — not just its name. The icon is the same one the outline / block bar uses, so a
@@ -199,16 +142,21 @@ interface TocEntry { id: string; text: string; level: number }
 const scrollToId = (id: string) =>
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
+const triggerDownload = (blob: Blob, filename: string) => {
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
+
 export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: () => void }) {
-  const [history, dispatchHistory] = useReducer(documentHistoryReducer, {
-    past: [],
-    present: null,
-    future: [],
-  })
+  const [ws, dispatch] = useReducer(workspaceReducer, undefined, initialWorkspace)
   const [paste, setPaste] = useState('')
   const [showSource, setShowSource] = useState(false)
   const [preview, setPreview] = useState(false)
   const [insertAnchor, setInsertAnchor] = useState<HTMLElement | null>(null)
+  const [exportAnchor, setExportAnchor] = useState<HTMLElement | null>(null)
 
   const mainRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
@@ -216,18 +164,21 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
   const [activeHeading, setActiveHeading] = useState<string | null>(null)
   const [activeBlock, setActiveBlock] = useState<number | null>(null)
 
-  const blocks = history.present
-  const canUndo = history.past.length > 0
-  const canRedo = history.future.length > 0
+  const activePath = ws.activePath
+  const activeFile = activePath ? ws.files.get(activePath) ?? null : null
+  const blocks = activeFile?.history?.present ?? null
+  const canUndo = (activeFile?.history?.past.length ?? 0) > 0
+  const canRedo = (activeFile?.history?.future.length ?? 0) > 0
 
   const markdown = useMemo(() => (blocks ? serializeDocument(blocks) : ''), [blocks])
 
   const commitBlocks = useCallback((updater: BlocksUpdater) => {
-    dispatchHistory({ type: 'commit', updater })
-  }, [])
+    if (!activePath) return
+    dispatch({ type: 'commit', path: activePath, updater })
+  }, [activePath])
 
   const openDocument = (src: string) => {
-    dispatchHistory({ type: 'reset', blocks: parseDocument(src) })
+    dispatch({ type: 'openSingle', blocks: parseDocument(src) })
   }
 
   const replaceFromMarkdown = (src: string) => {
@@ -235,7 +186,10 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
   }
 
   const closeDocument = () => {
-    dispatchHistory({ type: 'reset', blocks: null })
+    if (dirtyCount > 0 && !window.confirm(
+      `Discard unsaved edits in ${dirtyCount} file${dirtyCount > 1 ? 's' : ''}? Export a ZIP first to keep them.`,
+    )) return
+    dispatch({ type: 'reset' })
     setPaste('')
     setPreview(false)
     setShowSource(false)
@@ -243,12 +197,14 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
   }
 
   const undo = useCallback(() => {
-    dispatchHistory({ type: 'undo' })
-  }, [])
+    if (!activePath) return
+    dispatch({ type: 'undo', path: activePath })
+  }, [activePath])
 
   const redo = useCallback(() => {
-    dispatchHistory({ type: 'redo' })
-  }, [])
+    if (!activePath) return
+    dispatch({ type: 'redo', path: activePath })
+  }, [activePath])
 
   const updateBlock = (i: number, block: DocBlock) =>
     commitBlocks((prev) => prev!.map((b, idx) => (idx === i ? block : b)))
@@ -283,14 +239,60 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
   })
 
   const copy = () => navigator.clipboard?.writeText(markdown)
+
   const download = () => {
-    const blob = new Blob([markdown], { type: 'text/markdown' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = 'document.md'
-    a.click()
-    URL.revokeObjectURL(a.href)
+    const name = activeFile ? activeFile.displayPath.split('/').pop() || 'document.md' : 'document.md'
+    triggerDownload(new Blob([markdown], { type: 'text/markdown' }), name)
   }
+
+  // ---- repo workspace ----
+  const dirtyCount = useMemo(
+    () => [...ws.files.values()].filter((f) => f.dirty).length,
+    [ws.files],
+  )
+  const loadedCount = useMemo(
+    () => [...ws.files.values()].filter((f) => f.history).length,
+    [ws.files],
+  )
+
+  const loadRepo = (res: LoadResult) => {
+    setPreview(false)
+    setShowSource(false)
+    setInsertAnchor(null)
+    dispatch({ type: 'loadRepo', meta: res.meta, files: res.files })
+  }
+
+  const selectFile = (path: string) => {
+    setInsertAnchor(null)
+    dispatch({ type: 'setActive', path })
+  }
+
+  const exportWorkspaceZip = async (onlyDirty: boolean) => {
+    if (!ws.meta) return
+    const blob = await exportZip(ws.files, { onlyDirty })
+    if (!blob) return
+    const label = ws.meta.subPath ? ws.meta.subPath.split('/').pop() : ws.meta.repo
+    triggerDownload(blob, `${label || 'docs'}${onlyDirty ? '-edited' : ''}.zip`)
+  }
+
+  // Lazily fetch a file's content the first time it is opened (raw host, not rate
+  // limited). The in-flight ref dedupes concurrent fetches (incl. React StrictMode's
+  // double-invoke) without a cleanup that would cancel the very fetch this run starts —
+  // dispatching fileLoading changes activeFile and re-triggers this effect, so a
+  // cleanup-based guard would abort the request before it ever resolves.
+  const inFlight = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    if (!ws.meta || !activeFile || activeFile.state !== 'unloaded') return
+    const path = activeFile.path
+    if (inFlight.current.has(path)) return
+    const { owner, repo, branch } = ws.meta
+    inFlight.current.add(path)
+    dispatch({ type: 'fileLoading', path })
+    fetchRawFile(owner, repo, branch, path)
+      .then((markdownText) => dispatch({ type: 'fileLoaded', path, markdown: markdownText }))
+      .catch((err) => dispatch({ type: 'fileError', path, error: (err as Error).message }))
+      .finally(() => inFlight.current.delete(path))
+  }, [ws.meta, activeFile])
 
   useEffect(() => {
     if (!blocks) return
@@ -424,13 +426,42 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
                   <ContentCopyIcon />
                 </IconButton>
               </Tooltip>
-              <Tooltip title="Download .md">
+              <Tooltip title={ws.mode === 'repo' ? 'Download this file' : 'Download .md'}>
                 <IconButton size="small" onClick={download}>
                   <DownloadIcon />
                 </IconButton>
               </Tooltip>
-              <Button size="small" onClick={closeDocument}>Close</Button>
             </>
+          )}
+          {ws.mode === 'repo' && (
+            <>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<FolderZipOutlinedIcon />}
+                disabled={loadedCount === 0}
+                onClick={(e) => setExportAnchor(e.currentTarget)}
+              >
+                Export ZIP{dirtyCount > 0 ? ` · ${dirtyCount}` : ''}
+              </Button>
+              <Menu anchorEl={exportAnchor} open={Boolean(exportAnchor)} onClose={() => setExportAnchor(null)}>
+                <MenuItem
+                  disabled={dirtyCount === 0}
+                  onClick={() => { setExportAnchor(null); void exportWorkspaceZip(true) }}
+                >
+                  Edited files ({dirtyCount})
+                </MenuItem>
+                <MenuItem
+                  disabled={loadedCount === 0}
+                  onClick={() => { setExportAnchor(null); void exportWorkspaceZip(false) }}
+                >
+                  All opened files ({loadedCount})
+                </MenuItem>
+              </Menu>
+            </>
+          )}
+          {ws.mode !== 'empty' && (
+            <Button size="small" onClick={closeDocument}>Close</Button>
           )}
           <Tooltip title="Toggle light/dark">
             <IconButton size="small" onClick={onToggleMode}>
@@ -440,7 +471,7 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
         </Toolbar>
       </AppBar>
 
-      {!blocks ? (
+      {ws.mode === 'empty' ? (
         <div className="empty-state">
           <Box sx={{ display: 'grid', gap: 2, justifyItems: 'center' }}>
             <ZensicalLogo size={56} gradient className="empty-logo" />
@@ -461,37 +492,67 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
               <Button variant="contained" disabled={!paste.trim()} onClick={() => openDocument(paste)}>
                 Open in editor
               </Button>
-              <Button variant="outlined" onClick={() => dispatchHistory({ type: 'reset', blocks: [newBlock('frontmatter'), newBlock('markdown')] })}>
+              <Button variant="outlined" onClick={() => dispatch({ type: 'openSingle', blocks: [newBlock('frontmatter'), newBlock('markdown')] })}>
                 Start blank
               </Button>
               <Button variant="outlined" onClick={() => { setPaste(SAMPLE); openDocument(SAMPLE) }}>
                 Load sample
               </Button>
             </Box>
+            <LoadFromGitHub onLoaded={loadRepo} />
           </Box>
         </div>
       ) : (
         <div className={`zx-body ${bodyClass}`}>
           <nav className="zx-sidebar zx-sidebar--primary">
-            <div className="zx-side-title">Document</div>
-            {blocks.map((block, i) => {
-              const Icon = OUTLINE_ICON[block.type]
-              return (
-                <button
-                  key={i}
-                  className={`zx-nav-item${activeBlock === i ? ' active' : ''}`}
-                  onClick={() => scrollToId(`zx-block-${i}`)}
-                >
-                  <Icon className="zx-nav-ico" />
-                  <span className="zx-nav-label">{outlineLabel(block)}</span>
-                </button>
-              )
-            })}
+            {ws.mode === 'repo' && ws.meta && (
+              <>
+                {ws.meta.truncated && (
+                  <div className="zx-tree-warn">
+                    Large repo — the file list may be incomplete.
+                  </div>
+                )}
+                <div className="zx-side-title">
+                  Files <span className="zx-side-sub">{ws.meta.owner}/{ws.meta.repo}</span>
+                </div>
+                <FileTree files={ws.files} activePath={activePath} onSelect={selectFile} />
+              </>
+            )}
+            {blocks && (
+              <>
+                <div className="zx-side-title">{ws.mode === 'repo' ? 'Outline' : 'Document'}</div>
+                {blocks.map((block, i) => {
+                  const Icon = OUTLINE_ICON[block.type]
+                  return (
+                    <button
+                      key={i}
+                      className={`zx-nav-item${activeBlock === i ? ' active' : ''}`}
+                      onClick={() => scrollToId(`zx-block-${i}`)}
+                    >
+                      <Icon className="zx-nav-ico" />
+                      <span className="zx-nav-label">{outlineLabel(block)}</span>
+                    </button>
+                  )
+                })}
+              </>
+            )}
           </nav>
 
           <main className="zx-main" ref={mainRef}>
             <div className={`zx-content${showSource ? ' wide' : ''}${preview ? ' zx-preview' : ''}`} ref={contentRef}>
-              {blocks.length === 0 ? (
+              {!blocks ? (
+                <Box className="empty-doc">
+                  {activeFile?.state === 'loading' ? (
+                    <Typography variant="body2" sx={{ color: 'var(--muted)' }}>Loading file…</Typography>
+                  ) : activeFile?.state === 'error' ? (
+                    <Typography variant="body2" color="error">{activeFile.error}</Typography>
+                  ) : (
+                    <Typography variant="body2" sx={{ color: 'var(--muted)' }}>
+                      Select a markdown file from the list to start editing.
+                    </Typography>
+                  )}
+                </Box>
+              ) : blocks.length === 0 ? (
                 <Box className="empty-doc">
                   <Typography variant="body2" sx={{ color: 'var(--muted)' }}>This document is empty.</Typography>
                   <Button sx={{ mt: 1 }} size="small" variant="contained" onClick={() => insertBlockAt(0, newBlock('markdown'))}>
@@ -519,7 +580,7 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
             </div>
           </main>
 
-          {showSource ? (
+          {showSource && blocks ? (
             <div className="zx-source-pane">
               <div className="zx-source-title">Markdown source · regenerated on every edit</div>
               <textarea
