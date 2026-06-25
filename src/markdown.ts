@@ -1,9 +1,43 @@
 import { marked } from 'marked'
+import { resolveIcon } from './preview/icons.ts'
 
 // Render a markdown fragment (prose segment or a single table cell) to HTML for the preview.
 // `breaks: true` honours single-newline and trailing-space line breaks the way Material for
 // MkDocs renders cell bodies. This is display-only; the source of truth stays the raw md.
 marked.setOptions({ breaks: true, gfm: true })
+
+// MkDocs-Material icon shortcodes — `:material-rocket-launch-outline:{ .lg .middle }`,
+// `:octicons-cpu-16:`, `:simple-nokia:`, `:fontawesome-brands-docker:`. We emit an empty
+// placeholder span carrying the icon name + any attr_list classes; the SVG is fetched and
+// inlined after render (see preview/icons.ts). Only these four known prefixes match, so
+// ordinary text with colons (URLs, ratios, `key: value`) is never touched.
+const ICON_RE = /^:((?:material|fontawesome|octicons|simple)-[a-z0-9-]+):(?:\{\s*([^}]*?)\s*\})?/
+
+marked.use({
+  extensions: [
+    {
+      name: 'mkdocsIcon',
+      level: 'inline',
+      start(src: string) {
+        const i = src.indexOf(':')
+        return i === -1 ? undefined : i
+      },
+      tokenizer(src: string) {
+        const m = ICON_RE.exec(src)
+        if (!m) return undefined
+        return { type: 'mkdocsIcon', raw: m[0], icon: m[1], attrs: m[2] ?? '' }
+      },
+      renderer(token) {
+        const classes = (String(token.attrs).match(/\.[\w-]+/g) ?? []).map((c) => c.slice(1))
+        const cls = ['twemoji', ...classes].join(' ')
+        // Inline the SVG when cached; otherwise an empty span that fills on a later
+        // re-render once the on-demand fetch (kicked off here) resolves.
+        const svg = resolveIcon(String(token.icon)) ?? ''
+        return `<span class="${cls}">${svg}</span>`
+      },
+    },
+  ],
+})
 
 const FENCE = /^(\s*)(`{3,}|~{3,})\s*(.*)$/
 const DIV_OPEN = /^(\s*)<div\b([^>]*)>\s*$/

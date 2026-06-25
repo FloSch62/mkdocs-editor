@@ -818,6 +818,17 @@
 .zx-tree-tools .MuiInputBase-root { font-size: 12.5px; }
 .zx-tree-tools .MuiInputBase-input { padding-top: 5px; padding-bottom: 5px; }
 .zx-tree-empty { padding: 4px 10px; color: var(--muted); font-size: 12px; font-style: italic; opacity: 0.7; }
+
+/* MkDocs-Material inline icons (`:material-…:` shortcodes → fetched SVG) */
+.prose .twemoji { display: inline-flex; height: 1.125em; vertical-align: text-bottom; }
+.prose .twemoji svg { width: 1.125em; height: 1.125em; fill: currentColor; }
+.prose .twemoji.middle { vertical-align: middle; }
+.prose .twemoji.lg { height: 1.5em; }
+.prose .twemoji.lg svg { width: 1.5em; height: 1.5em; }
+.prose .twemoji.xl { height: 2.25em; }
+.prose .twemoji.xl svg { width: 2.25em; height: 2.25em; }
+.prose .twemoji.xxl { height: 3em; }
+.prose .twemoji.xxl svg { width: 3em; height: 3em; }
 .zx-tree-folder .zx-nav-label { font-weight: 600; color: var(--fg); }
 .zx-tree-caret { font-size: 16px !important; flex-shrink: 0; opacity: 0.55; margin-left: -4px; }
 .zx-tree-file .zx-nav-label { flex: 1; }
