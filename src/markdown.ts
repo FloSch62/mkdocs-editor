@@ -266,6 +266,7 @@ function readSlashBlock(lines: string[], i: number): { kind: string; title: stri
   const kind = open[3].toLowerCase()
   let j = i + 1
   let innerFence: { char: string; len: number } | null = null
+  let nested = 0
   while (j < lines.length) {
     const inner = lines[j]
     const ifm = FENCE.exec(inner)
@@ -275,7 +276,20 @@ function readSlashBlock(lines: string[], i: number): { kind: string; title: stri
     }
     if (ifm) { innerFence = { char: ifm[2][0], len: ifm[2].length }; j++; continue }
     const close = BLOCK_CLOSE.exec(inner)
+    if (nested > 0) {
+      const nestedOpen = BLOCK_OPEN.exec(inner)
+      if (nestedOpen && nestedOpen[1] === indent && nestedOpen[2].length >= marker.length) nested++
+      else if (close && close[1] === indent && close[2].length === marker.length) nested--
+      j++
+      continue
+    }
     if (close && close[1] === indent && close[2].length === marker.length) break
+    const nestedOpen = BLOCK_OPEN.exec(inner)
+    if (nestedOpen && nestedOpen[1] === indent && nestedOpen[2].length >= marker.length) {
+      nested++
+      j++
+      continue
+    }
     j++
   }
   if (j >= lines.length) return null

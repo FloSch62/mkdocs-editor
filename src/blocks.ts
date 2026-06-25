@@ -56,9 +56,10 @@ export type DocBlock =
   | { type: 'markdown'; text: string }
   | { type: 'frontmatter'; data: FrontMatterData }
   | { type: 'htmlTable'; table: Table }
+  | { type: 'htmlBlock'; spec: string; body: string; syntax?: 'zensical' | 'literal' }
   | { type: 'markdownTable'; table: MarkdownTable }
   | { type: 'admonition'; kind: string; title: string; body: string; collapse: AdmonitionCollapse; syntax: SyntaxStyle }
-  | { type: 'details'; title: string; body: string; open: boolean; syntax: SyntaxStyle }
+  | { type: 'details'; title: string; body: string; open: boolean; syntax: SyntaxStyle; kind?: string }
   | { type: 'tabset'; tabs: TabItem[]; syntax: SyntaxStyle }
   | { type: 'snippet'; path: string }
   | { type: 'code'; lang: string; title: string; body: string; attrs: string; copy: boolean; select: boolean; lineNumbers: boolean; highlight: string }
@@ -103,6 +104,8 @@ const HTML_OPEN = /^(\s*)(\/{3,})\s+html\s*\|\s*([A-Za-z][\w-]*)\s*(.*?)\s*$/
 const BLOCK_OPEN = /^(\s*)(\/{3,})\s+([A-Za-z][\w-]*)\s*(?:\|\s*(.*?))?\s*$/
 // A fence closer: a line that is only slashes.
 const CLOSE = /^(\s*)(\/{3,})\s*$/
+const DIV_OPEN = /^(\s*)<div\b([^>]*)>\s*$/
+const DIV_CLOSE = /^\s*<\/div>\s*$/
 // A fenced code block delimiter (``` or ~~~) — block syntax inside code is literal.
 const FENCE = /^(\s*)(`{3,}|~{3,})\s*(.*)$/
 const SNIPPET = /^\s*--8<--\s+"(.+?)"\s*$/
@@ -197,9 +200,11 @@ function readSlashBlock(lines: string[], i: number): { raw: string; kind: string
   const kind = open[3].toLowerCase()
   const title = open[4]?.trim() ?? ''
   let fence: { char: string; len: number } | null = null
+  let nested = 0
   let j = i + 1
   while (j < lines.length) {
-    const fm = FENCE.exec(lines[j])
+    const line = lines[j]
+    const fm = FENCE.exec(line)
     if (fence) {
       if (fm && fm[2][0] === fence.char && fm[2].length >= fence.len && fm[3].trim() === '') fence = null
       j++
@@ -210,8 +215,21 @@ function readSlashBlock(lines: string[], i: number): { raw: string; kind: string
       j++
       continue
     }
-    const close = CLOSE.exec(lines[j])
+    const close = CLOSE.exec(line)
+    if (nested > 0) {
+      const nestedOpen = BLOCK_OPEN.exec(line)
+      if (nestedOpen && nestedOpen[1] === blockIndent && nestedOpen[2].length >= marker) nested++
+      else if (close && close[1] === blockIndent && close[2].length === marker) nested--
+      j++
+      continue
+    }
     if (close && close[1] === blockIndent && close[2].length === marker) break
+    const nestedOpen = BLOCK_OPEN.exec(line)
+    if (nestedOpen && nestedOpen[1] === blockIndent && nestedOpen[2].length >= marker) {
+      nested++
+      j++
+      continue
+    }
     j++
   }
   const end = j < lines.length ? j + 1 : j
@@ -348,17 +366,17 @@ function parseCodeBlockAt(lines: string[], i: number): [DocBlock, number] | null
 
 function parseGrid(body: string): GridCard[] {
   const cards: GridCard[] = []
-  const chunks = body.split(/\n(?=-\s+)/)
+  const chunks = body.split(/\n(?=[*-]\s+)/)
   for (const chunk of chunks) {
     const lines = chunk.split('\n')
     const first = lines.shift()?.trim() ?? ''
-    const link = /^-\s+\[([^\]]+)\]\(([^)]+)\)\s*$/.exec(first)
-    const strong = /^-\s+\*\*([^*]+)\*\*\s*$/.exec(first)
+    const link = /^[*-]\s+\[([^\]]+)\]\(([^)]+)\)\s*$/.exec(first)
+    const strong = /^[*-]\s+(?:(?::[A-Za-z0-9-]+:(?:\{\s*[^}]*\s*\})?\s*)+)?\*\*([^*]+)\*\*\s*$/.exec(first)
     if (!link && !strong) continue
     cards.push({
       title: link?.[1] ?? strong?.[1] ?? 'Card',
       href: link?.[2] ?? '',
-      body: trimOuterBlankLines(lines.map((line) => line.replace(/^ {2,4}/, '')).join('\n')),
+      body: trimOuterBlankLines(lines.map((line) => line.replace(/^ {2,4}/, '')).join('\n')).replace(/^---\n+/, ''),
     })
   }
   return cards.length ? cards : [{ title: 'Card', href: '', body: body.trim() }]
@@ -368,6 +386,49 @@ function isGridCardsSpec(spec: string): boolean {
   return /^div(?:#[A-Za-z0-9_-]+)?(?:\.[A-Za-z0-9_-]+)*\.grid(?:\.[A-Za-z0-9_-]+)*\.cards(?:\.[A-Za-z0-9_-]+)*(?:\s|$)/.test(spec.trim())
 }
 
+function classList(attrs: string): string[] {
+  const m = /\bclass\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/.exec(attrs)
+  return (m?.[1] ?? m?.[2] ?? m?.[3] ?? '').split(/\s+/).filter(Boolean)
+}
+
+function isLiteralGridCardsDiv(attrs: string): boolean {
+  const classes = new Set(classList(attrs))
+  return classes.has('grid') && classes.has('cards') && /\bmarkdown\b/.test(attrs)
+}
+
+function literalDivRendersMarkdown(attrs: string): boolean {
+  const classes = new Set(classList(attrs))
+  return /\bmarkdown\b/.test(attrs) || classes.has('embed-result')
+}
+
+function readLiteralDiv(lines: string[], i: number): { attrs: string; body: string; next: number } | null {
+  const open = DIV_OPEN.exec(lines[i])
+  if (!open) return null
+  let depth = 1
+  let j = i + 1
+  let fence: { char: string; len: number } | null = null
+  while (j < lines.length) {
+    const line = lines[j]
+    const fm = FENCE.exec(line)
+    if (fence) {
+      if (fm && fm[2][0] === fence.char && fm[2].length >= fence.len && fm[3].trim() === '') fence = null
+      j++
+      continue
+    }
+    if (fm) {
+      fence = { char: fm[2][0], len: fm[2].length }
+      j++
+      continue
+    }
+    if (DIV_OPEN.test(line)) depth++
+    else if (DIV_CLOSE.test(line) && --depth === 0) break
+    j++
+  }
+  if (j >= lines.length) return null
+  const bodyLines = lines.slice(i + 1, j).map((line) => open[1] && line.startsWith(open[1]) ? line.slice(open[1].length) : line)
+  return { attrs: open[2] ?? '', body: trimOuterBlankLines(bodyLines.join('\n')), next: j + 1 }
+}
+
 function zensicalBlock(kind: string, title: string, body: string): string {
   const head = title.trim() ? `/// ${kind} | ${title.trim()}` : `/// ${kind}`
   return [head, body.trim(), '///'].join('\n')
@@ -375,6 +436,23 @@ function zensicalBlock(kind: string, title: string, body: string): string {
 
 function indentBody(body: string): string {
   return body.split('\n').map((line) => line ? `    ${line}` : '').join('\n')
+}
+
+function htmlTagParts(spec: string): { tag: string; attrs: string } {
+  const m = /^([A-Za-z][\w-]*)((?:[.#][A-Za-z0-9_-]+)*)(.*)$/.exec(spec.trim())
+  if (!m) return { tag: 'div', attrs: '' }
+  const classes = [...m[2].matchAll(/\.([A-Za-z0-9_-]+)/g)].map((c) => c[1])
+  const id = /#([A-Za-z0-9_-]+)/.exec(m[2])?.[1]
+  let attrs = ''
+  if (id) attrs += ` id="${id}"`
+  if (classes.length) attrs += ` class="${classes.join(' ')}"`
+  attrs += m[3] ?? ''
+  return { tag: m[1].toLowerCase(), attrs }
+}
+
+function serializeLiteralHtmlBlock(spec: string, body: string): string {
+  const { tag, attrs } = htmlTagParts(spec)
+  return [`<${tag}${attrs}>`, '', body.trim(), '', `</${tag}>`].join('\n')
 }
 
 /** Parse a full markdown document into editable MkDocs/Zensical blocks. */
@@ -402,6 +480,21 @@ export function parseDocument(src: string): DocBlock[] {
       buf.push(line)
       i++
       continue
+    }
+
+    const div = DIV_OPEN.exec(line)
+    if (div && literalDivRendersMarkdown(div[2] ?? '')) {
+      const block = readLiteralDiv(lines, i)
+      if (block) {
+        flush()
+        if (isLiteralGridCardsDiv(block.attrs)) {
+          blocks.push({ type: 'grid', cards: parseGrid(block.body) })
+        } else {
+          blocks.push({ type: 'htmlBlock', spec: `div${block.attrs}`.trim(), body: block.body, syntax: 'literal' })
+        }
+        i = block.next
+        continue
+      }
     }
 
     const code = parseCodeBlockAt(lines, i)
@@ -453,13 +546,16 @@ export function parseDocument(src: string): DocBlock[] {
         const block = readSlashBlock(lines, i)
         const bodyLines = block.body.split('\n')
         let openByDefault = false
+        let detailsKind = ''
         let k = 0
-        while (k < bodyLines.length && /^\s*(open|attrs|class|id|markdown|summary):\s*/.test(bodyLines[k])) {
+        while (k < bodyLines.length && /^\s*(type|open|attrs|class|id|markdown|summary):\s*/.test(bodyLines[k])) {
+          const typeOption = /^\s*type:\s*(.+)$/.exec(bodyLines[k])
+          if (typeOption) detailsKind = typeOption[1].trim().replace(/^["']|["']$/g, '')
           const openOption = /^\s*open:\s*(.+)$/.exec(bodyLines[k])
           if (openOption) openByDefault = /^(true|yes|1)$/i.test(openOption[1].trim())
           k++
         }
-        blocks.push({ type: 'details', title: block.title || 'Details', body: trimOuterBlankLines(bodyLines.slice(k).join('\n')), open: openByDefault, syntax: 'zensical' })
+        blocks.push({ type: 'details', title: block.title || 'Details', body: trimOuterBlankLines(bodyLines.slice(k).join('\n')), open: openByDefault, syntax: 'zensical', kind: detailsKind })
         i = block.next
         continue
       }
@@ -467,6 +563,13 @@ export function parseDocument(src: string): DocBlock[] {
         flush()
         const block = readSlashBlock(lines, i)
         blocks.push({ type: 'grid', cards: parseGrid(block.body) })
+        i = block.next
+        continue
+      }
+      if (kind === 'html') {
+        flush()
+        const block = readSlashBlock(lines, i)
+        blocks.push({ type: 'htmlBlock', spec: block.title || 'div', body: block.body, syntax: 'zensical' })
         i = block.next
         continue
       }
@@ -617,6 +720,9 @@ function serializeBlock(block: DocBlock): string {
     }
     case 'htmlTable':
       return serializeTable(block.table, 3)
+    case 'htmlBlock':
+      if (block.syntax === 'literal') return serializeLiteralHtmlBlock(block.spec, block.body)
+      return zensicalBlock(`html | ${block.spec}`, '', block.body)
     case 'markdownTable':
       return serializeMarkdownTable(block.table)
     case 'admonition':
@@ -627,7 +733,11 @@ function serializeBlock(block: DocBlock): string {
       }
       return zensicalBlock(block.kind, block.title, block.body)
     case 'details':
-      return zensicalBlock('details', block.title, block.open ? `    open: true\n\n${block.body.trim()}` : block.body)
+      return zensicalBlock('details', block.title, [
+        block.kind?.trim() ? `    type: ${block.kind.trim()}` : '',
+        block.open ? '    open: true' : '',
+        block.body.trim(),
+      ].filter(Boolean).join('\n\n'))
     case 'tabset':
       return block.tabs.map((tab) => {
         if (block.syntax === 'classic') return [`=== "${tab.title.replace(/"/g, '\\"')}"`, '', indentBody(tab.body.trim())].join('\n')
@@ -718,7 +828,7 @@ export function newBlock(kind: InsertKind): DocBlock {
     case 'admonition':
       return { type: 'admonition', kind: 'note', title: 'Note', body: 'Write the callout content here.', collapse: 'none', syntax: 'zensical' }
     case 'details':
-      return { type: 'details', title: 'Details', body: 'Write the collapsible content here.', open: false, syntax: 'zensical' }
+      return { type: 'details', title: 'Details', body: 'Write the collapsible content here.', open: false, syntax: 'zensical', kind: '' }
     case 'tabset':
       return { type: 'tabset', syntax: 'zensical', tabs: [{ title: 'Option A', body: 'Content for option A.' }, { title: 'Option B', body: 'Content for option B.' }] }
     case 'snippet':

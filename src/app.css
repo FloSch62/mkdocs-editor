@@ -596,17 +596,26 @@
   white-space: nowrap;
 }
 .block-bar .block-detail { display: none; }
-/* the Edit / Done toggle is the primary action — make it stand out in the toolbar */
-.block-edit-toggle.MuiButton-root {
-  min-width: 0;
-  padding: 1px 10px;
-  color: var(--md-primary-fg-color);
-  background: color-mix(in srgb, var(--md-primary-fg-color) 12%, transparent);
-  border-radius: 100px;
-  font-size: 11px;
+.block-bar .MuiIconButton-root {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  color: var(--fg);
 }
-.block-edit-toggle.MuiButton-root:hover {
-  background: color-mix(in srgb, var(--md-primary-fg-color) 20%, transparent);
+.block-bar .MuiIconButton-root .MuiSvgIcon-root {
+  color: inherit;
+}
+/* the Edit / Done toggle is the primary action in the icon toolbar */
+.block-edit-toggle.MuiIconButton-root {
+  display: inline-flex;
+  color: var(--fg) !important;
+  background: transparent;
+}
+.block-edit-toggle.MuiIconButton-root:hover {
+  background: var(--zx-surface-hover);
+}
+.block-edit-toggle.MuiIconButton-root .MuiSvgIcon-root {
+  color: inherit !important;
 }
 
 .block-body { padding: 0; }
@@ -669,6 +678,26 @@
   color: var(--muted);
   font-size: 12px;
 }
+.nested-block-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+  padding-left: 12px;
+  border-left: 2px solid color-mix(in srgb, var(--md-primary-fg-color) 35%, var(--line));
+}
+.nested-block-editor.empty {
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: var(--zx-surface-hover);
+}
+.nested-block-editor > .block-card {
+  margin: 0;
+}
+.nested-block-editor .block-bar {
+  min-height: 32px;
+}
 
 /* Insert menu — every block choice shows its icon and a one-line description of what it is */
 .zx-insert-item { align-items: flex-start; gap: 10px; padding: 7px 14px; }
@@ -697,30 +726,8 @@
 
 /* markdown block: rendered prose is primary; the source editor reveals on demand */
 .render-preview { padding: 2px 0; }
-.zx-prose-block { position: relative; border-radius: 6px; cursor: text; transition: background 0.12s; }
-.zx-prose-block:hover { background: var(--zx-surface-hover); box-shadow: 0 0 0 6px var(--zx-surface-hover); }
-.zx-edit-hint {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 7px;
-  font-size: 10.5px;
-  font-weight: 600;
-  color: var(--muted);
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 100px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.12s;
-}
-.zx-prose-block:hover .zx-edit-hint { opacity: 1; }
 
-/* render-first container for interactive blocks (tabs / details) — editing is via the
-   block toolbar's Edit button, so the block's own controls stay clickable */
+/* render-first container for remaining non-click-to-edit previews */
 .zx-render-first { position: relative; }
 
 .mini-editor { margin-top: 6px; }

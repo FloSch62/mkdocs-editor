@@ -68,6 +68,7 @@ import { buildShareUrl, clearShareUrl, findSharedFile, parseSharedRepoState } fr
 
 const clone = <T,>(v: T): T => structuredClone(v)
 
+type BlockReplacement = DocBlock | DocBlock[]
 type BlocksState = DocBlock[] | null
 type BlocksUpdater = BlocksState | ((prev: BlocksState) => BlocksState)
 
@@ -109,6 +110,7 @@ const OUTLINE_ICON: Record<DocBlock['type'], SvgIconComponent> = {
   markdown: NotesOutlinedIcon,
   frontmatter: ArticleOutlinedIcon,
   htmlTable: TableChartOutlinedIcon,
+  htmlBlock: CodeIcon,
   markdownTable: TableChartOutlinedIcon,
   admonition: WarningAmberOutlinedIcon,
   details: UnfoldMoreOutlinedIcon,
@@ -136,6 +138,7 @@ function outlineLabel(block: DocBlock): string {
     case 'markdown': return firstHeading(block.text) ?? firstLine(block.text) ?? 'Paragraph'
     case 'frontmatter': return String(block.data.title ?? 'Front matter')
     case 'htmlTable': return 'Nested table'
+    case 'htmlBlock': return block.spec
     case 'markdownTable': return 'Data table'
     case 'admonition': return block.title || block.kind
     case 'details': return block.title || 'Details'
@@ -304,8 +307,12 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
     dispatch({ type: 'redo', path: activePath })
   }, [activePath])
 
-  const updateBlock = (i: number, block: DocBlock) =>
-    commitBlocks((prev) => prev!.map((b, idx) => (idx === i ? block : b)))
+  const updateBlock = (i: number, replacement: BlockReplacement) =>
+    commitBlocks((prev) => {
+      const next = [...prev!]
+      next.splice(i, 1, ...(Array.isArray(replacement) ? replacement : [replacement]))
+      return next
+    })
 
   const insertBlockAt = (idx: number, block: DocBlock) =>
     commitBlocks((prev) => {

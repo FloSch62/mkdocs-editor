@@ -81,7 +81,7 @@ function stripIndent(line: string, indent: string): string {
 }
 
 function isChildBlock(openIndent: string, openMarker: number, parentIndent: string, parentMarker: number): boolean {
-  return openIndent === parentIndent && openMarker > parentMarker
+  return openIndent === parentIndent && openMarker > 0 && openMarker >= parentMarker
 }
 
 function parseUntil(lines: string[], start: number, marker: number, indent: string): [RichNode[], number] {
