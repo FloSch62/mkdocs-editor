@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react'
 import {
   AppBar,
   Box,
@@ -147,8 +147,13 @@ function outlineLabel(block: DocBlock): string {
 
 interface TocEntry { id: string; text: string; level: number }
 
-const scrollToId = (id: string) =>
-  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+const HEADING_SELECTOR = '.prose h1, .prose h2, .prose h3'
+
+function tocEqual(a: TocEntry[], b: TocEntry[]): boolean {
+  return a.length === b.length && a.every((entry, i) =>
+    entry.id === b[i].id && entry.text === b[i].text && entry.level === b[i].level,
+  )
+}
 
 const triggerDownload = (blob: Blob, filename: string) => {
   const a = document.createElement('a')
@@ -180,6 +185,31 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
   const canRedo = (activeFile?.history?.future.length ?? 0) > 0
 
   const markdown = useMemo(() => (blocks ? serializeDocument(blocks) : ''), [blocks])
+
+  const assignHeadingIds = useCallback((): HTMLElement[] => {
+    const content = contentRef.current
+    if (!content) return []
+    const headingEls = Array.from(content.querySelectorAll(HEADING_SELECTOR)) as HTMLElement[]
+    headingEls.forEach((el, i) => {
+      if (!el.id) el.id = `zx-h-${i}`
+    })
+    return headingEls
+  }, [])
+
+  // RichMarkdown uses dangerouslySetInnerHTML. A parent state update can replace that HTML
+  // and drop the synthetic heading IDs, so restore them after every render.
+  useLayoutEffect(() => {
+    assignHeadingIds()
+  })
+
+  const scrollToId = useCallback((id: string) => {
+    const scroller = mainRef.current
+    const el = document.getElementById(id)
+    if (!scroller || !el) return
+    const marginTop = Number.parseFloat(getComputedStyle(el).scrollMarginTop) || 0
+    const targetTop = el.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop
+    scroller.scrollTo({ top: Math.max(0, targetTop - marginTop), behavior: 'smooth' })
+  }, [])
 
   // Resolve relative image paths in the preview against the active file's directory on
   // raw.githubusercontent.com. Identity (no rewriting) in paste/single-doc mode.
@@ -347,22 +377,30 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [blocks, canRedo, canUndo, redo, undo])
 
-  // Collect the on-page headings and wire scroll-spy for both the TOC and the outline.
-  // Re-runs whenever the rendered markdown changes.
+  // Collect current headings and wire scroll-spy for both the TOC and the outline.
   useEffect(() => {
+    if (!blocks) {
+      setToc((prev) => (prev.length ? [] : prev))
+      if (activeHeading !== null) setActiveHeading(null)
+      if (activeBlock !== null) setActiveBlock(null)
+      return
+    }
+
     const content = contentRef.current
     const scroller = mainRef.current
-    if (!content || !scroller) { setToc([]); return }
+    if (!content || !scroller) {
+      setToc((prev) => (prev.length ? [] : prev))
+      return
+    }
 
-    const headingEls = Array.from(
-      content.querySelectorAll('.prose h1, .prose h2, .prose h3'),
-    ) as HTMLElement[]
-    headingEls.forEach((el, i) => { if (!el.id) el.id = `zx-h-${i}` })
-    setToc(headingEls.map((el) => ({
+    const headingEls = assignHeadingIds()
+    const nextToc = headingEls.map((el) => ({
       id: el.id,
       text: el.textContent?.trim() || 'Untitled',
       level: Number(el.tagName[1]),
-    })))
+    }))
+    setToc((prev) => (tocEqual(prev, nextToc) ? prev : nextToc))
+    if (!headingEls.length && activeHeading !== null) setActiveHeading(null)
 
     const blockEls = Array.from(content.querySelectorAll('[data-zx-block]')) as HTMLElement[]
     const visibleH = new Set<Element>()
@@ -380,7 +418,7 @@ export default function App({ mode, onToggleMode }: { mode: Mode; onToggleMode: 
     headingEls.forEach((el) => headingObs.observe(el))
     blockEls.forEach((el) => blockObs.observe(el))
     return () => { headingObs.disconnect(); blockObs.disconnect() }
-  }, [markdown])
+  }, [activeBlock, activeHeading, assignHeadingIds, blocks, markdown, toc])
 
   const bodyClass = showSource ? 'with-source' : toc.length ? '' : 'no-toc'
 
